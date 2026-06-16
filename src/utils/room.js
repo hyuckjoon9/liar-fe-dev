@@ -29,5 +29,6 @@ export function pickSessionPayload(data) {
   return {
     playerId: data?.playerId,
     roomCode: data?.roomCode,
+    playerSecret: data?.playerSecret,
   };
 }

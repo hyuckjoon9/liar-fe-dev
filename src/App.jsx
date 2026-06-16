@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createRoom, getRoom, getRooms, joinRoom, leaveRoom } from './api/rooms';
+import { createRoom, getRoom, getRooms, joinRoom, leaveRoom, getPlayerGameState } from './api/rooms';
 import CreateRoomForm from './components/CreateRoomForm';
 import GameScreen from './components/GameScreen';
 import JoinRoomModal from './components/JoinRoomModal';
@@ -14,6 +14,7 @@ export default function App() {
   const [room, setRoom] = useState(null);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [playerId, setPlayerId] = useState(getSession().playerId);
+  const [playerSecret, setPlayerSecret] = useState(getSession().playerSecret);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [wsConnected, setWsConnected] = useState(false);
@@ -62,11 +63,17 @@ export default function App() {
     try {
       const data = await getRoom(roomCode);
       const nextRoom = normalizeRoom(data);
-      if (nextRoom.status === 'VOTING') {
+
+      if (nextRoom.game?.phase) {
+        setPhase(nextRoom.game.phase);
+      } else if (nextRoom.status === 'VOTING') {
         setPhase('VOTE');
       } else if (nextRoom.status === 'PLAYING') {
         setPhase((current) => (current === 'RESULT' ? current : 'SPEECH'));
+      } else if (nextRoom.status === 'WAITING') {
+        setPhase(null);
       }
+
       setRoom(() => {
         // 이미 방을 나간 상태(세션 비워짐)라면 방 정보 상태를 갱신하지 않습니다.
         const session = getSession();
@@ -83,10 +90,52 @@ export default function App() {
 
         return nextRoom;
       });
+
+      const session = getSession();
+      const pId = session.playerId;
+      const pSecret = session.playerSecret;
+
+      if (roomCode && pId && pSecret && (nextRoom.status !== 'WAITING' || nextRoom.game)) {
+        try {
+          const gameState = await getPlayerGameState(roomCode, pId, pSecret);
+          setRoleInfo({
+            role: gameState.role,
+            topicWord: gameState.topicWord,
+          });
+        } catch (gameStateErr) {
+          const status = gameStateErr.status;
+          if (status === 401 || status === 403) {
+            clearSession();
+            setPlayerId(null);
+            setPlayerSecret(null);
+            setRoom(null);
+            setRoleInfo(null);
+            resetGameState();
+            setError('인증 오류가 발생하여 대기실로 이동합니다.');
+            await loadRooms();
+            return;
+          } else if (status === 404) {
+            clearSession();
+            setPlayerId(null);
+            setPlayerSecret(null);
+            setRoom(null);
+            setRoleInfo(null);
+            resetGameState();
+            setError(gameStateErr.message);
+            await loadRooms();
+            return;
+          } else {
+            console.error("개인 게임 상태 조회 중 네트워크/기타 오류 발생:", gameStateErr);
+          }
+        }
+      }
     } catch (err) {
       clearSession();
       setPlayerId(null);
+      setPlayerSecret(null);
       setRoom(null);
+      setRoleInfo(null);
+      resetGameState();
       setError(err.message);
       await loadRooms();
     } finally {
@@ -374,6 +423,7 @@ export default function App() {
       const session = pickSessionPayload(data);
       saveSession(session);
       setPlayerId(session.playerId);
+      setPlayerSecret(session.playerSecret);
       setRoleInfo(null);
       setSpeechLogs([]);
       resetGameState();
@@ -394,6 +444,7 @@ export default function App() {
       const session = pickSessionPayload({ ...data, roomCode });
       saveSession(session);
       setPlayerId(session.playerId);
+      setPlayerSecret(session.playerSecret);
       setRoleInfo(null);
       setSpeechLogs([]);
       resetGameState();
@@ -421,6 +472,7 @@ export default function App() {
       await leaveRoom(session.roomCode, session.playerId);
       clearSession();
       setPlayerId(null);
+      setPlayerSecret(null);
       setRoleInfo(null);
       setSpeechLogs([]);
       resetGameState();
