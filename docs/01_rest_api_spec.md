@@ -86,3 +86,16 @@ REST API
 WebSocket
 → 실시간 이벤트 처리
 ```
+
+---
+
+# 7. 프론트엔드 상태 복원 및 UI 활용 명세
+
+## 새로고침 시 VOTE_RESULT 단계 복원
+- 프론트엔드는 새로고침(F5) 발생 시 `GET /api/rooms/{roomCode}` API를 호출하여 최신 게임 상태를 로드합니다.
+- 이때 응답 데이터의 `game.phase`가 `"VOTE_RESULT"` 이고 `game.voteResult` 객체가 존재할 경우, 프론트엔드는 이를 사용하여 투표 결과 화면을 강제 복원(`setVoteResult`)합니다.
+- 만약 `phase`가 `"VOTE_RESULT"`가 아니라면, 이전 투표 결과가 화면에 유지되지 않도록 `voteResult` 상태를 `null`로 초기화합니다.
+
+## 플레이어 생존 상태(status) 렌더링
+- `GET /api/rooms/{roomCode}` 응답 내 `players[]` 목록의 각 플레이어 객체는 `status` 필드를 가집니다.
+- 프론트엔드는 이 `status` 필드의 값(`ALIVE` / `DEAD`)을 기준으로 각 플레이어의 생존 및 탈락(사망) 상태를 화면에 렌더링하고, 투표 화면 진입 시 투표 가능 여부(`canVote` 등)를 결정하는 기준으로 사용합니다.

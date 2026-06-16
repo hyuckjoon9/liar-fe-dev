@@ -49,7 +49,7 @@ liar_frontend/
 ## Source
 
 - `src/main.jsx`: React 앱 마운트
-- `src/App.jsx`: 앱 최상위 상태, REST 호출 흐름, WebSocket 구독 연결
+- `src/App.jsx`: 앱 최상위 상태 관리. REST API를 통한 새로고침 상태 복원(voteResult 등) 수행, WebSocket(STOMP) 채널 구독 및 실시간 이벤트 핸들링, 다음 라운드 확인(`next-round`) 및 발언 전송(`speak`) 메시지 발행 등을 담당합니다.
 - `src/config.js`: API/WebSocket Base URL 관리
 - `src/styles.css`: 전체 UI 스타일과 반응형 레이아웃
 
@@ -75,4 +75,4 @@ liar_frontend/
 - `src/components/RoomList.jsx`: 방 목록 표시와 입장 버튼
 - `src/components/JoinRoomModal.jsx`: 방 입장 모달
 - `src/components/Lobby.jsx`: 대기실 화면, 플레이어 목록, 게임 시작/퇴장 버튼
-- `src/components/GameScreen.jsx`: 게임 진행 화면, 역할/제시어, 턴, 발언 입력, 발언 로그
+- `src/components/GameScreen.jsx`: 게임 진행 화면 렌더링. 역할 및 제시어 표시, 턴 멘트 마스킹, 발언 입력 폼 및 발언 로그(채팅창) 출력, 투표 대상 목록 렌더링 및 본인 생존 여부(`ALIVE`/`DEAD`) 기준 투표 버튼 활성/비활성화 처리, 투표 결과(`VOTE_RESULT`) 화면 렌더링을 담당합니다. (※ 투표 버튼의 실시간 비활성화 오동작 방어 로직 내포)
