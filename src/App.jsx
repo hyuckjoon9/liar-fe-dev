@@ -75,12 +75,20 @@ export default function App() {
 
       if (nextRoom.game?.phase) {
         setPhase(nextRoom.game.phase);
-      } else if (nextRoom.status === 'VOTING') {
-        setPhase('VOTE');
-      } else if (nextRoom.status === 'PLAYING') {
-        setPhase((current) => (current === 'RESULT' ? current : 'SPEECH'));
-      } else if (nextRoom.status === 'WAITING') {
-        setPhase(null);
+        if (nextRoom.game.phase === 'VOTE_RESULT' && nextRoom.game.voteResult) {
+          setVoteResult(nextRoom.game.voteResult);
+        } else {
+          setVoteResult(null);
+        }
+      } else {
+        setVoteResult(null);
+        if (nextRoom.status === 'VOTING') {
+          setPhase('VOTE');
+        } else if (nextRoom.status === 'PLAYING') {
+          setPhase((current) => (current === 'RESULT' ? current : 'SPEECH'));
+        } else if (nextRoom.status === 'WAITING') {
+          setPhase(null);
+        }
       }
 
       setRoom(() => {
@@ -803,20 +811,11 @@ export default function App() {
   }
 
   function handleConfirmVoteResult() {
-    if (pendingTurn) {
-      const currentTurnPlayerId = normalizeEventId(pendingTurn.currentTurnPlayerId ?? pendingTurn.playerId);
-      setRoom((current) =>
-        current
-          ? {
-              ...current,
-              currentTurnPlayerId: currentTurnPlayerId || current.currentTurnPlayerId,
-              currentTurnIndex: pendingTurn.currentTurnIndex ?? current.currentTurnIndex,
-            }
-          : current,
-      );
-      setPendingTurn(null);
+    try {
+      publishJson(stompClientRef.current, `/pub/rooms/${room.roomCode}/next-round`, { playerId });
+    } catch (err) {
+      setError(err.message);
     }
-    setPhase('SPEECH');
   }
 
   function handleConfirmGameOver() {
