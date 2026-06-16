@@ -22,6 +22,7 @@ export function normalizeRoom(room) {
       currentGame?.currentTurnPlayerId ??
       restoredTurnPlayerId ??
       null,
+    game: currentGame || null,
   };
 }
 

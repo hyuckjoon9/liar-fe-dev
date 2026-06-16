@@ -48,7 +48,11 @@ export default function GameScreen({
   const orderedPlayers = getOrderedPlayers(players, room.turnOrder);
   const currentPlayerId = playerId || getSession().playerId;
 
-  const voteTargets = players.filter((player) => {
+  const voteTargets = (
+    voteState.votablePlayers && voteState.votablePlayers.length > 0
+      ? voteState.votablePlayers
+      : players
+  ).filter((player) => {
     const targetPlayerId = player.playerId;
     const isAlive = player.status !== "DEAD";
     return isAlive && String(targetPlayerId) !== String(currentPlayerId);
@@ -118,11 +122,15 @@ export default function GameScreen({
           <div>
             <p className="eyebrow">Turn</p>
             <h2>
-              {!hasCurrentTurn
-                ? "발언 단계 준비 중"
-                : isMyTurn
-                  ? "내 차례입니다."
-                  : `${currentTurnName}님의 차례입니다.`}
+              {phase === "SPEECH"
+                ? !hasCurrentTurn
+                  ? "발언 단계 준비 중"
+                  : isMyTurn
+                    ? "내 차례입니다."
+                    : `${currentTurnName}님의 차례입니다.`
+                : phase === "VOTE" || isVoting
+                  ? "투표 진행 중"
+                  : "발언 단계 준비 중"}
             </h2>
             {isDead && (
               <p className="turnHint">당신은 탈락했습니다 (관전 중)</p>
@@ -169,7 +177,7 @@ export default function GameScreen({
                 <h2>투표 대상 선택</h2>
               </div>
               <p className="voteCount">
-                투표 완료: {voteState.votedCount} / {voteState.totalCount}
+                투표 완료: {voteState.votedCount ?? 0} / {voteState.totalVoterCount ?? voteState.totalCount ?? 0}
               </p>
             </div>
             {voteState.hasVoted && <p className="turnHint">투표 완료</p>}
@@ -183,7 +191,7 @@ export default function GameScreen({
                       className="smallButton"
                       type="button"
                       onClick={() => onVote(targetPlayerId, playerId)}
-                      disabled={voteState.hasVoted || !playerId || isDead}
+                      disabled={voteState.hasVoted === true || voteState.canVote === false || !playerId || isDead}
                     >
                       투표하기
                     </button>
@@ -308,9 +316,12 @@ export default function GameScreen({
                 <div className="speechItem" key={`${log.playerId}-${index}`}>
                   <span>
                     [
-                    {log.nickname ||
-                      getTurnName(players, log.playerId) ||
-                      log.playerId}
+                    {(() => {
+                      if (log.nickname) return log.nickname;
+                      const matched = players.find(p => normalizeId(p.playerId) === normalizeId(log.playerId));
+                      if (matched) return matched.nickname;
+                      return log.playerId || "알 수 없음";
+                    })()}
                     ] : {log.content}
                   </span>
                 </div>
