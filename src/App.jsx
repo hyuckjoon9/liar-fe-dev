@@ -519,7 +519,16 @@ export default function App() {
       if (event?.type === 'PLAYER_VOTED') {
         const data = event.data ?? event;
         setVoteState((current) => {
-          const isMe = String(data.voterId ?? data.playerId).trim() === String(playerId).trim();
+          const rawVoterId = data.voterId ?? data.playerId;
+          const trimmedVoterId = (rawVoterId !== null && rawVoterId !== undefined) ? String(rawVoterId).trim() : '';
+          const trimmedPlayerId = (playerId !== null && playerId !== undefined) ? String(playerId).trim() : '';
+          
+          const isMe = Boolean(
+            trimmedVoterId !== '' &&
+            trimmedPlayerId !== '' &&
+            trimmedVoterId === trimmedPlayerId
+          );
+
           const isDead = roomRef.current?.players?.find(p => String(p.playerId) === String(playerId))?.status === 'DEAD';
           return {
             ...current,
