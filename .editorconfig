@@ -1,0 +1,17 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
+root = true
+
+# [1] 모든 파일에 적용되는 글로벌 기본 규칙
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# [2] 프론트엔드 및 스크립트 파일 전용 규칙 (들여쓰기 2칸 강제)
+[{*.js,*.jsx,*.ts,*.tsx,*.json,*.html,*.css,*.yaml,*.yml}]
+indent_size = 2
