@@ -3,28 +3,28 @@ export function normalizeRoom(room) {
   const currentGame = source.currentGame ?? source.game;
   const turnOrder = source.turnOrder ?? currentGame?.turnOrder ?? [];
   const currentTurnIndex = source.currentTurnIndex ?? currentGame?.currentTurnIndex ?? 0;
-  const turnEntry = turnOrder[currentTurnIndex];
-  const restoredTurnPlayerId =
-    typeof turnEntry === 'object' ? turnEntry?.playerId ?? turnEntry?.id : turnEntry;
 
   return {
     roomCode: source.roomCode,
+    title: source.title ?? null,
+    hostId: source.hostId ?? null,
+    visibility: source.visibility ?? 'PUBLIC',
     currentPlayers: source.currentPlayers ?? source.players?.length ?? 0,
     maxPlayers: source.maxPlayers ?? 0,
-    hasPassword: Boolean(source.hasPassword),
     status: source.status ?? 'WAITING',
+    listStatus: source.listStatus ?? null,
     players: source.players ?? [],
     turnOrder,
     currentTurnIndex,
     currentTurnPlayerId:
       source.currentTurnPlayerId ??
-      source.currentTurn?.playerId ??
       currentGame?.currentTurnPlayerId ??
-      restoredTurnPlayerId ??
       null,
     game: currentGame || null,
+    lastGameResult: source.lastGameResult ?? null,
   };
 }
+
 
 export function pickSessionPayload(data) {
   return {

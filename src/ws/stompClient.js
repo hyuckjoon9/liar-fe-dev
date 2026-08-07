@@ -11,19 +11,21 @@ const EVENT_TYPES = new Set([
   'GAME_START',
   'ROLE_ASSIGNED',
   'PLAYER_SPOKEN',
-  'PLAYER_SPEAK',
   'TURN_CHANGED',
   'VOTE_STARTED',
-  'VOTING_START',
+  'FINAL_DEFENSE_STARTED',
+  'FINAL_VOTE_STARTED',
   'PLAYER_VOTED',
   'VOTE_RESULT',
   'GAME_OVER',
+  'SESSION_REPLACED',
   'ERROR',
 ]);
 
-export function createStompClient() {
+export function createStompClient(connectHeaders = {}) {
   return new Client({
     brokerURL: WS_URL,
+    connectHeaders,
     reconnectDelay: 3000,
     debug: () => {},
     onStompError: (frame) => {

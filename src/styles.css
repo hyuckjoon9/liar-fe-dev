@@ -27,15 +27,15 @@ body {
   background:
     radial-gradient(
       circle at 18% 12%,
-      rgba(127, 33, 115, 0.26),
-      transparent 30%
+      rgba(127, 33, 115, 0.18),
+      transparent 32%
     ),
     radial-gradient(
       circle at 88% 18%,
-      rgba(170, 16, 58, 0.22),
-      transparent 28%
+      rgba(170, 16, 58, 0.14),
+      transparent 30%
     ),
-    linear-gradient(135deg, #08070c 0%, #15111f 52%, #0c0910 100%);
+    linear-gradient(135deg, #08070c 0%, #130f1b 52%, #0c0910 100%);
 }
 
 button,
@@ -52,7 +52,7 @@ button {
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .appShell {
@@ -98,17 +98,18 @@ button:disabled {
   align-items: start;
 }
 
+/* 최외각 전용 패널 및 모달 (카드 형태 디자인은 최외각 영역에서만 사용) */
 .panel,
 .modal {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  background: rgba(19, 16, 27, 0.92);
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(18, 15, 26, 0.94);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
 }
 
 .panel {
   min-width: 0;
-  padding: clamp(18px, 3vw, 24px);
+  padding: clamp(20px, 3vw, 28px);
 }
 
 .panelHeader h2,
@@ -136,18 +137,18 @@ label {
 input,
 select {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 8px;
-  background: #0d0b13;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: #0c0a12;
   color: #ffffff;
-  padding: 12px 13px;
+  padding: 11px 13px;
   outline: none;
+  transition: border-color 0.2s ease;
 }
 
 input:focus,
 select:focus {
-  border-color: #ff5277;
-  box-shadow: 0 0 0 3px rgba(255, 82, 119, 0.14);
+  border-color: rgba(255, 82, 119, 0.6);
 }
 
 .checkRow {
@@ -165,25 +166,27 @@ select:focus {
 .ghostButton,
 .smallButton {
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   color: #ffffff;
-  font-weight: 800;
+  font-weight: 700;
+  transition: opacity 0.2s ease;
 }
 
 .primaryButton {
-  background: linear-gradient(135deg, #d7194a, #7b2cbf);
-  padding: 12px 18px;
+  background: linear-gradient(135deg, #c41843, #6b24aa);
+  padding: 11px 18px;
 }
 
 .ghostButton {
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
   padding: 10px 14px;
 }
 
 .smallButton {
-  background: #2d173d;
-  padding: 8px 12px;
+  background: #2a1538;
+  padding: 7px 12px;
+  font-size: 13px;
 }
 
 .listHeader {
@@ -194,34 +197,29 @@ select:focus {
 }
 
 .table {
-  margin-top: 20px;
+  margin-top: 16px;
   min-width: 0;
 }
 
-.tableHead,
+.tableHead {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(82px, 1fr) minmax(78px, 1fr) minmax(88px, 1fr) auto;
+  gap: 12px;
+  padding: 0 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: #8c8098;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 내부 행 디자인: 중첩 카드 상자를 제거하고 깔끔한 구분선 행으로 구성 */
 .tableRow {
   display: grid;
-  grid-template-columns:
-    minmax(90px, 1fr) minmax(82px, 1fr) minmax(78px, 1fr)
-    minmax(88px, 1fr) auto;
+  grid-template-columns: minmax(90px, 1fr) minmax(82px, 1fr) minmax(78px, 1fr) minmax(88px, 1fr) auto;
   gap: 12px;
   align-items: center;
-}
-
-.tableHead {
-  padding: 0 14px 12px;
-  color: #92869d;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.tableRow {
-  min-height: 58px;
-  margin-top: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 10px 14px;
+  padding: 12px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   color: #d9cfe2;
   min-width: 0;
 }
@@ -238,13 +236,13 @@ select:focus {
 }
 
 .status {
-  color: #ffb0c1;
-  font-weight: 800;
+  color: #ff94ab;
+  font-weight: 700;
 }
 
 .empty {
-  margin: 30px 0 12px;
-  color: #92869d;
+  margin: 24px 0 12px;
+  color: #8c8098;
   text-align: center;
 }
 
@@ -255,12 +253,12 @@ select:focus {
   z-index: 20;
   transform: translateX(-50%);
   width: min(520px, calc(100% - 32px));
-  border: 1px solid rgba(255, 82, 119, 0.36);
+  border: 1px solid rgba(255, 82, 119, 0.2);
   border-radius: 8px;
-  background: #2a0d19;
+  background: #240b15;
   color: #ffd7df;
   padding: 12px 16px;
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.36);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
 }
 
 .modalBackdrop {
@@ -269,12 +267,12 @@ select:focus {
   display: grid;
   place-items: center;
   z-index: 10;
-  background: rgba(3, 2, 6, 0.7);
+  background: rgba(3, 2, 6, 0.75);
   padding: 16px;
 }
 
 .modal {
-  width: min(420px, 100%);
+  width: min(440px, 100%);
   padding: 24px;
 }
 
@@ -294,198 +292,227 @@ select:focus {
   width: min(860px, 100%);
 }
 
+.settingsSection {
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+
 .gameGrid {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
   gap: 18px;
-  margin-bottom: 22px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .gameGrid h2 {
   margin: 6px 0 0;
   color: #ffffff;
-  font-size: 24px;
+  font-size: 22px;
   letter-spacing: 0;
 }
 
-.topicText {
-  margin: 12px 0 0;
-  border: 1px solid rgba(255, 82, 119, 0.22);
-  border-radius: 8px;
-  background: rgba(255, 82, 119, 0.08);
-  color: #ffd7df;
-  padding: 14px;
-  font-size: 18px;
-  font-weight: 800;
-}
-
-.turnHint {
+.topicTextNoBox {
   margin: 10px 0 0;
-  color: #bdb0c9;
+  color: #ffd7df;
+  font-size: 17px;
   font-weight: 700;
 }
 
+.turnHint {
+  margin: 8px 0 0;
+  color: #bdb0c9;
+  font-weight: 600;
+}
+
 .speakForm {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  display: flex;
+  gap: 8px;
   margin-bottom: 22px;
-}
-
-@keyframes speakFormGlow {
-  0% {
-    box-shadow: 0 0 8px rgba(255, 82, 119, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(255, 82, 119, 0.8);
-  }
-  100% {
-    box-shadow: 0 0 8px rgba(255, 82, 119, 0.3);
-  }
-}
-
-.speakForm.isGlow input,
-.speakForm.isGlow button {
-  animation: speakFormGlow 2.2s infinite ease-in-out;
-}
-
-.speechLog {
-  display: grid;
-  gap: 10px;
-}
-
-.votePanel,
-.resultPanel {
-  display: grid;
-  gap: 14px;
-  margin-bottom: 22px;
-  border: 1px solid rgba(123, 44, 191, 0.24);
   border-radius: 8px;
-  background: rgba(123, 44, 191, 0.08);
-  padding: 16px;
+  padding: 4px;
+  transition: box-shadow 0.3s ease;
+}
+
+.speakForm input {
+  flex: 1;
+}
+
+.inputCount {
+  margin: -16px 0 22px;
+  color: #bdb0c9;
+  font-size: 12px;
+  text-align: right;
+}
+
+@keyframes spotlightPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 82, 119, 0.25), inset 0 0 0 1px rgba(255, 82, 119, 0.15); }
+  50% { box-shadow: 0 0 20px rgba(255, 82, 119, 0.5), inset 0 0 0 1px rgba(255, 82, 119, 0.3); }
+}
+
+.speakFormSpotlight {
+  animation: spotlightPulse 2s ease-in-out infinite;
+}
+
+.speakFormSpotlight input {
+  border-color: rgba(255, 82, 119, 0.5);
+}
+
+.gaugeTrack {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.gaugeBar {
+  height: 100%;
+  background: linear-gradient(90deg, #ff5277, #7b2cbf);
+  border-radius: 999px;
+  transition: width 0.1s linear;
+}
+
+.sectionBlock {
+  margin-bottom: 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .voteCount {
   margin: 0;
   color: #ffd7df;
-  font-weight: 800;
+  font-weight: 700;
 }
 
-.resultPanel h2 {
-  margin: 0;
-  color: #ffffff;
-  font-size: 26px;
-  letter-spacing: 0;
-}
-
-.resultGrid {
+.infoGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
-  gap: 10px;
-}
-
-.speechItem {
-  display: grid;
-  gap: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 12px 14px;
-}
-
-.speechItem strong,
-.speechItem span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.speechItem strong {
-  color: #ffb0c1;
-}
-
-.speechItem span {
-  color: #ffffff;
-}
-
-.players {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-  gap: 10px;
-  margin-top: 22px;
-}
-
-.playerCard {
-  display: flex;
-  min-height: 56px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 12px 14px;
-  min-width: 0;
-}
-
-.playerCard.isCurrentTurn {
-  border-color: rgba(255, 82, 119, 0.42);
-  background: rgba(255, 82, 119, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(255, 82, 119, 0.16);
-}
-
-.playerCard.isDead {
-  border-color: rgba(255, 255, 255, 0.04);
-  background: rgba(255, 255, 255, 0.01);
-  opacity: 0.55;
-}
-
-.playerCard.isDead span {
-  text-decoration: line-through;
-  color: #92869d;
-}
-
-.playerCard.isMe {
-  border-color: rgba(123, 44, 191, 0.5);
-  background: rgba(123, 44, 191, 0.08);
-}
-
-.playerCard.isMe.isCurrentTurn {
-  border-color: #ff5277;
-  background: rgba(255, 82, 119, 0.1);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 82, 119, 0.16),
-    0 0 8px rgba(123, 44, 191, 0.2);
-}
-
-.playerCard span {
-  color: #ffffff;
-  font-weight: 800;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.playerCard div {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 8px;
 }
 
-.playerCard b,
-.playerCard em {
-  border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-style: normal;
+.infoRow {
+  display: flex;
+  gap: 10px;
+  font-size: 15px;
 }
 
-.playerCard b {
-  background: rgba(255, 82, 119, 0.18);
+.infoLabel {
+  color: #a89bb6;
+  font-weight: 600;
+}
+
+.infoValue {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.speechLogSection {
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.speechLogList {
+  max-height: 240px;
+  overflow-y: auto;
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding-right: 4px;
+}
+
+.speechLogRow {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 14px;
+}
+
+.speechSpeaker {
+  color: #ff94ab;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.speechContent {
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+/* 플레이어 목록: 중첩 카드 박스 제거, 은은한 하단 구획 리스트 구조 */
+.playerList {
+  display: grid;
+  gap: 2px;
+  margin-top: 14px;
+}
+
+.playerRow {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #d9cfe2;
+}
+
+.playerRow.isCurrentTurn {
+  color: #ffffff;
+}
+
+.playerRow.isCurrentTurn .playerRowName {
   color: #ff8aa2;
 }
 
-.playerCard em {
-  background: rgba(123, 44, 191, 0.22);
+.playerRow.isDead {
+  opacity: 0.5;
+}
+
+.playerRow.isDead .playerRowName {
+  text-decoration: line-through;
+  color: #8c8098;
+}
+
+.playerRowName {
+  color: #ffffff;
+  font-weight: 700;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.playerRowBadges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badgeHost,
+.badgeMe {
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.badgeHost {
+  background: rgba(255, 82, 119, 0.15);
+  color: #ff94ab;
+}
+
+.badgeMe {
+  background: rgba(123, 44, 191, 0.18);
   color: #d8b7ff;
 }
 
@@ -532,7 +559,7 @@ select:focus {
 
   .tableRow strong {
     grid-column: 1 / -1;
-    font-size: 18px;
+    font-size: 17px;
   }
 
   .tableRow .status {
@@ -552,30 +579,12 @@ select:focus {
   }
 
   .speakForm {
-    grid-template-columns: 1fr;
-  }
-
-  .playerCard {
-    align-items: flex-start;
     flex-direction: column;
   }
 
-  .playerCard div {
-    justify-content: flex-start;
+  .playerRow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
-}
-
-.topicTextNoBox {
-  margin: 12px 0 0;
-  color: #ffd7df;
-  font-size: 18px;
-  font-weight: 800;
-}
-
-.speechLogList {
-  max-height: 250px;
-  overflow-y: auto;
-  display: grid;
-  gap: 8px;
-  padding-right: 4px;
 }

@@ -2,15 +2,14 @@ import { useState } from 'react';
 
 export default function CreateRoomForm({ onCreate, loading }) {
   const [nickname, setNickname] = useState('');
-  const [passwordEnabled, setPasswordEnabled] = useState(false);
-  const [password, setPassword] = useState('');
+  const [visibility, setVisibility] = useState('PUBLIC');
   const [maxPlayers, setMaxPlayers] = useState(6);
 
   function submit(event) {
     event.preventDefault();
     onCreate({
       nickname: nickname.trim(),
-      password: passwordEnabled ? password : '',
+      visibility,
       maxPlayers: Number(maxPlayers),
     });
   }
@@ -26,26 +25,13 @@ export default function CreateRoomForm({ onCreate, loading }) {
           닉네임
           <input value={nickname} onChange={(e) => setNickname(e.target.value)} required maxLength={16} />
         </label>
-        <label className="checkRow">
-          <input
-            type="checkbox"
-            checked={passwordEnabled}
-            onChange={(e) => setPasswordEnabled(e.target.checked)}
-          />
-          비밀번호 사용
+        <label>
+          공개 범위
+          <select value={visibility} onChange={(e) => setVisibility(e.target.value)}>
+            <option value="PUBLIC">공개방</option>
+            <option value="PRIVATE">비공개방 (초대 코드)</option>
+          </select>
         </label>
-        {passwordEnabled && (
-          <label>
-            비밀번호
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              maxLength={20}
-            />
-          </label>
-        )}
         <label>
           최대 인원
           <select value={maxPlayers} onChange={(e) => setMaxPlayers(e.target.value)}>

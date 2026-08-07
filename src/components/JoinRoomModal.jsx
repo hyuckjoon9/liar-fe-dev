@@ -2,12 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 
 export default function JoinRoomModal({ room, onClose, onJoin, loading }) {
   const [nickname, setNickname] = useState('');
-  const [password, setPassword] = useState('');
   const nicknameInputRef = useRef(null);
 
   useEffect(() => {
     if (room) {
-      setPassword('');
       if (nicknameInputRef.current) {
         nicknameInputRef.current.focus();
       }
@@ -18,7 +16,7 @@ export default function JoinRoomModal({ room, onClose, onJoin, loading }) {
 
   function submit(event) {
     event.preventDefault();
-    onJoin(room.roomCode, { nickname: nickname.trim(), password });
+    onJoin(room.roomCode, { nickname: nickname.trim() });
   }
 
   return (
@@ -39,18 +37,6 @@ export default function JoinRoomModal({ room, onClose, onJoin, loading }) {
               maxLength={16}
             />
           </label>
-          {room.hasPassword && (
-            <label>
-              비밀번호
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                maxLength={20}
-              />
-            </label>
-          )}
           <div className="modalActions">
             <button type="button" className="ghostButton" onClick={onClose}>
               취소

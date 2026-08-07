@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { createRoom, getRoom, getRooms, joinRoom, leaveRoom, getPlayerGameState } from './api/rooms';
+import { createRoom, getRoom, getRooms, joinRoom, leaveRoom, getPlayerGameState, updateRoomSettings } from './api/rooms';
 import CreateRoomForm from './components/CreateRoomForm';
 import GameScreen from './components/GameScreen';
 import JoinRoomModal from './components/JoinRoomModal';
 import Lobby from './components/Lobby';
 import RoomList from './components/RoomList';
 import { clearSession, getSession, saveSession } from './storage/session';
+import { applyTurnChanged } from './utils/game';
+import { restoreFinalStage, restoreLastGameResult } from './utils/gameRestoration';
 import { normalizeRoom, pickSessionPayload } from './utils/room';
 import { createStompClient, publishJson, subscribeToEvents } from './ws/stompClient';
+
+const ROOM_LIST_POLL_INTERVAL_MS = 1000;
 
 export default function App() {
   const [rooms, setRooms] = useState([]);
@@ -23,7 +27,6 @@ export default function App() {
   const [phase, setPhase] = useState('SPEECH');
   const [voteState, setVoteState] = useState({
     votedCount: 0,
-    totalCount: 0,
     totalVoterCount: 0,
     hasVoted: false,
     canVote: true,
@@ -31,7 +34,9 @@ export default function App() {
   });
   const [voteResult, setVoteResult] = useState(null);
   const [gameOverResult, setGameOverResult] = useState(null);
-  const [pendingTurn, setPendingTurn] = useState(null);
+  const [finalDefense, setFinalDefense] = useState(null);
+  const [finalVote, setFinalVote] = useState(null);
+  const [sessionReplacedModal, setSessionReplacedModal] = useState(false);
   const stompClientRef = useRef(null);
   const roomsSubscriptionRef = useRef(null);
   const roomSubscriptionRef = useRef(null);
@@ -42,6 +47,7 @@ export default function App() {
   const isRestoringRef = useRef(false);
   const lastRestoredTimeRef = useRef(0);
   const isSpeakingRef = useRef(false);
+  const isFetchingGameStartPlayersRef = useRef(false);
 
   useEffect(() => {
     roomRef.current = room;
@@ -80,6 +86,12 @@ export default function App() {
         } else {
           setVoteResult(null);
         }
+      } else if (restoreLastGameResult(nextRoom)) {
+        setGameOverResult(restoreLastGameResult(nextRoom));
+        setFinalDefense(null);
+        setFinalVote(null);
+        setVoteResult(null);
+        setPhase('GAME_OVER');
       } else {
         setVoteResult(null);
         if (nextRoom.status === 'VOTING') {
@@ -115,18 +127,7 @@ export default function App() {
       if (roomCode && pId && pSecret && (nextRoom.status !== 'WAITING' || nextRoom.game)) {
         try {
           isRestoringRef.current = true;
-          const response = await getPlayerGameState(roomCode, pId, pSecret);
-
-          let gameState = response;
-          if (response && typeof response === 'object') {
-            if (response.data !== undefined) {
-              if (response.data && typeof response.data === 'object' && response.data.data !== undefined) {
-                gameState = response.data.data;
-              } else {
-                gameState = response.data;
-              }
-            }
-          }
+          const gameState = await getPlayerGameState(roomCode, pId, pSecret);
 
           if (gameState) {
             setRoleInfo({
@@ -134,96 +135,86 @@ export default function App() {
               topicWord: gameState.topicWord,
             });
 
-            // boolean 필드 호환 처리 (단순 OR 금지, undefined 여부 판단)
-            let hasVoted = undefined;
-            if (gameState.hasVoted !== undefined) {
-              hasVoted = gameState.hasVoted;
-            } else if (gameState.isHasVoted !== undefined) {
-              hasVoted = gameState.isHasVoted;
+            // 플레이어 병합: 방 응답과 개인 상태 응답을 합쳐 DEAD 상태 누락 방지
+            const nextRoomPlayers = nextRoom.players || [];
+            const gameStatePlayers = gameState.players || [];
+            const playerMap = new Map();
+            nextRoomPlayers.forEach(p => {
+              playerMap.set(String(p.playerId).trim(), { ...p });
+            });
+            gameStatePlayers.forEach(p => {
+              const id = String(p.playerId).trim();
+              if (playerMap.has(id)) {
+                const existing = playerMap.get(id);
+                playerMap.set(id, {
+                  ...existing,
+                  ...p,
+                  status: p.status === 'DEAD' || existing.status === 'DEAD' ? 'DEAD' : p.status || existing.status,
+                });
+              } else {
+                playerMap.set(id, { ...p });
+              }
+            });
+            const mergedPlayers = Array.from(playerMap.values());
+            setRoom((current) => {
+              if (!current) return null;
+              return { ...current, players: mergedPlayers };
+            });
+
+            if (gameState.voteResult) {
+              setVoteResult(gameState.voteResult);
             }
 
-            let canVote = undefined;
-            if (gameState.canVote !== undefined) {
-              canVote = gameState.canVote;
-            } else if (gameState.isCanVote !== undefined) {
-              canVote = gameState.isCanVote;
-            }
+            const restoredFinalStage = restoreFinalStage(nextRoom.game, gameState);
+            setFinalDefense(restoredFinalStage.finalDefense);
+            setFinalVote(restoredFinalStage.finalVote);
 
             // 투표 관련 상태 복원
             setVoteState((current) => {
               const nextVoteState = { ...current };
-              if (hasVoted !== undefined) {
-                nextVoteState.hasVoted = hasVoted;
-              }
-              if (canVote !== undefined) {
-                nextVoteState.canVote = canVote;
-              }
-              if (gameState.votedCount !== undefined) {
-                nextVoteState.votedCount = gameState.votedCount;
-              }
-
-              const totalVal = gameState.totalVoterCount !== undefined ? gameState.totalVoterCount : gameState.totalCount;
-              if (totalVal !== undefined) {
-                nextVoteState.totalCount = totalVal;
-                nextVoteState.totalVoterCount = totalVal;
-              }
-              // votablePlayers가 없으면 빈 배열 처리
-              nextVoteState.votablePlayers = gameState.votablePlayers || [];
+              if (gameState.hasVoted !== undefined) nextVoteState.hasVoted = gameState.hasVoted;
+              if (gameState.canVote !== undefined) nextVoteState.canVote = gameState.canVote;
+              if (gameState.votedCount !== undefined) nextVoteState.votedCount = gameState.votedCount;
+              if (gameState.totalVoterCount !== undefined) nextVoteState.totalVoterCount = gameState.totalVoterCount;
+              // voteCandidates: 서버 필드명, voteState 내부 키는 votablePlayers 유지
+              nextVoteState.votablePlayers = gameState.voteCandidates || [];
               return nextVoteState;
             });
 
-            // 채팅 로그 복원 (중복 로그 방지하며 머지 및 닉네임 매핑)
+            // 채팅 로그 복원: spokenAt + playerId + content 기반 중복 방지
             const remoteSpeechLogs = gameState.speechLogs || [];
-            const playersList = nextRoom.players || [];
-
             setSpeechLogs((currentLogs) => {
               const result = [...currentLogs];
               remoteSpeechLogs.forEach((remoteLog) => {
-                const isDuplicate = result.some(
-                  (localLog) =>
-                    String(localLog.playerId) === String(remoteLog.playerId) &&
-                    localLog.content === remoteLog.content
-                );
+                const isDuplicate = result.some((localLog) => {
+                  if (localLog.spokenAt && remoteLog.spokenAt) {
+                    const lt = new Date(localLog.spokenAt).getTime();
+                    const rt = new Date(remoteLog.spokenAt).getTime();
+                    if (!isNaN(lt) && !isNaN(rt)) {
+                      return String(localLog.playerId).trim() === String(remoteLog.playerId).trim() &&
+                             localLog.content === remoteLog.content && lt === rt;
+                    }
+                  }
+                  return String(localLog.playerId).trim() === String(remoteLog.playerId).trim() &&
+                         localLog.content === remoteLog.content;
+                });
                 if (!isDuplicate) {
-                  // players에서 playerId에 해당하는 닉네임 찾기
-                  const matchingPlayer = playersList.find(
-                    (p) => String(p.playerId) === String(remoteLog.playerId)
-                  );
-                  const nickname = remoteLog.nickname || (matchingPlayer ? matchingPlayer.nickname : null) || remoteLog.playerId || "알 수 없음";
-
                   result.push({
                     playerId: remoteLog.playerId,
-                    nickname: nickname,
+                    nickname: remoteLog.nickname || '알 수 없음',
                     content: remoteLog.content,
+                    spokenAt: remoteLog.spokenAt,
                   });
                 }
+              });
+              result.sort((a, b) => {
+                const ta = a.spokenAt ? new Date(a.spokenAt).getTime() : 0;
+                const tb = b.spokenAt ? new Date(b.spokenAt).getTime() : 0;
+                return (isNaN(ta) ? 0 : ta) - (isNaN(tb) ? 0 : tb);
               });
               return result;
             });
 
-            // 복원 성공 직후 콘솔 디버그 로그 출력
-            const nextVoteStateLog = {
-              votedCount: gameState.votedCount,
-              totalCount: gameState.totalVoterCount !== undefined ? gameState.totalVoterCount : gameState.totalCount,
-              totalVoterCount: gameState.totalVoterCount !== undefined ? gameState.totalVoterCount : gameState.totalCount,
-              hasVoted,
-              canVote,
-              votablePlayers: gameState.votablePlayers || [],
-            };
-            const nextSpeechLogsLog = remoteSpeechLogs.map((remoteLog) => {
-              const matchingPlayer = playersList.find(
-                (p) => String(p.playerId) === String(remoteLog.playerId)
-              );
-              return {
-                playerId: remoteLog.playerId,
-                nickname: remoteLog.nickname || (matchingPlayer ? matchingPlayer.nickname : null) || remoteLog.playerId || "알 수 없음",
-                content: remoteLog.content,
-              };
-            });
-            console.log("=== 복원 성공 직후 데이터 확인 ===");
-            console.log("gameState:", gameState);
-            console.log("next voteState:", nextVoteStateLog);
-            console.log("next speechLogs:", nextSpeechLogsLog);
             lastRestoredTimeRef.current = Date.now();
           }
         } catch (gameStateErr) {
@@ -285,8 +276,36 @@ export default function App() {
     loadRooms();
   }, []);
 
+  // 인증되지 않은 메인 로비에서는 REST 폴링으로 공개 방 목록을 갱신한다.
   useEffect(() => {
-    const client = createStompClient();
+    if (room) return;
+    const interval = setInterval(loadRooms, ROOM_LIST_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [room]);
+
+  useEffect(() => {
+    // STOMP 연결은 오직 React state 값만으로 판단한다.
+    // getSession() 직접 참조를 제거하여, loadRoom 404 → setRoom(null) 이후
+    // 즉시 STOMP 연결이 차단되도록 경쟁 조건(Race Condition)을 제거한다.
+    const currentRoomCode = room?.roomCode || '';
+    const currentId = playerId || '';
+    const currentSecret = playerSecret || '';
+
+    // 백엔드 STOMP CONNECT 필수 조건: roomCode, playerId, playerSecret 모두 있어야만 연결
+    if (!currentRoomCode || !currentId || !currentSecret) {
+      stompClientRef.current?.deactivate();
+      stompClientRef.current = null;
+      setWsConnected(false);
+      return;
+    }
+
+    const connectHeaders = {
+      roomCode: currentRoomCode,
+      playerId: currentId,
+      playerSecret: currentSecret,
+    };
+
+    const client = createStompClient(connectHeaders);
     stompClientRef.current = client;
 
     client.onConnect = () => {
@@ -307,7 +326,7 @@ export default function App() {
       userSubscriptionRef.current?.unsubscribe();
       client.deactivate();
     };
-  }, []);
+  }, [room?.roomCode, playerId, playerSecret]);
 
   useEffect(() => {
     const client = stompClientRef.current;
@@ -317,77 +336,43 @@ export default function App() {
     if (!room?.roomCode || !client?.connected) return;
 
     roomSubscriptionRef.current = subscribeToEvents(client, `/sub/rooms/${room.roomCode}`, async (event) => {
-      console.log('수신한 WebSocket event.type:', event?.type, 'data:', event?.data);
       if (event?.type === 'ERROR') {
         const errMsg = event.message || event.data?.message || '오류가 발생했습니다.';
         setError(errMsg);
-        
-        const isVoteError = errMsg.includes('투표') || errMsg.includes('vote');
-        if (isVoteError && roomRef.current?.roomCode && playerId && playerSecret) {
+
+        if (roomRef.current?.roomCode && playerId && playerSecret) {
           getPlayerGameState(roomRef.current.roomCode, playerId, playerSecret)
-            .then((response) => {
-              let gameState = response;
-              if (response && typeof response === 'object') {
-                if (response.data !== undefined) {
-                  if (response.data && typeof response.data === 'object' && response.data.data !== undefined) {
-                    gameState = response.data.data;
-                  } else {
-                    gameState = response.data;
-                  }
-                }
-              }
+            .then((gameState) => {
               if (gameState) {
-                let hasVoted = undefined;
-                if (gameState.hasVoted !== undefined) {
-                  hasVoted = gameState.hasVoted;
-                } else if (gameState.isHasVoted !== undefined) {
-                  hasVoted = gameState.isHasVoted;
-                }
-                let canVote = undefined;
-                if (gameState.canVote !== undefined) {
-                  canVote = gameState.canVote;
-                } else if (gameState.isCanVote !== undefined) {
-                  canVote = gameState.isCanVote;
-                }
                 setVoteState((current) => {
                   const nextVoteState = { ...current };
-                  if (hasVoted !== undefined) {
-                    nextVoteState.hasVoted = hasVoted;
-                  }
-                  if (canVote !== undefined) {
-                    nextVoteState.canVote = canVote;
-                  }
-                  if (gameState.votedCount !== undefined) {
-                    nextVoteState.votedCount = gameState.votedCount;
-                  }
-                  const totalVal = gameState.totalVoterCount !== undefined ? gameState.totalVoterCount : gameState.totalCount;
-                  if (totalVal !== undefined) {
-                    nextVoteState.totalCount = totalVal;
-                    nextVoteState.totalVoterCount = totalVal;
-                  }
-                  const nextVotable = (gameState.votablePlayers || []).filter(
+                  if (gameState.hasVoted !== undefined) nextVoteState.hasVoted = gameState.hasVoted;
+                  if (gameState.canVote !== undefined) nextVoteState.canVote = gameState.canVote;
+                  if (gameState.votedCount !== undefined) nextVoteState.votedCount = gameState.votedCount;
+                  if (gameState.totalVoterCount !== undefined) nextVoteState.totalVoterCount = gameState.totalVoterCount;
+                  nextVoteState.votablePlayers = (gameState.voteCandidates || []).filter(
                     (p) => String(p.playerId) !== String(playerId) && p.status !== 'DEAD'
                   );
-                  nextVoteState.votablePlayers = nextVotable;
                   return nextVoteState;
                 });
               }
             })
             .catch((err) => {
-              console.error("에러 발생 후 투표 상태 재동기화 실패:", err);
+              console.error('에러 발생 후 투표 상태 재동기화 실패:', err);
             });
         }
         return;
       }
 
-      if (event?.type === 'PLAYER_SPOKEN' || event?.type === 'PLAYER_SPEAK') {
+      if (event?.type === 'PLAYER_SPOKEN') {
         const data = event.data ?? event;
         setSpeechLogs((logs) => [
           ...logs,
           {
             playerId: data.playerId,
-            nickname: data.nickname,
+            nickname: data.nickname || '알 수 없음',
             content: data.content,
+            spokenAt: data.spokenAt,
           },
         ]);
         return;
@@ -395,22 +380,11 @@ export default function App() {
 
       if (event?.type === 'TURN_CHANGED') {
         const data = event.data ?? event;
-        if (phaseRef.current === 'VOTE_RESULT' || phaseRef.current === 'VOTE') {
-          setPendingTurn(data);
-          return;
-        }
-
-        const currentTurnPlayerId = normalizeEventId(data.currentTurnPlayerId ?? data.playerId);
-        setRoom((current) =>
-          current
-            ? {
-                ...current,
-                currentTurnPlayerId: currentTurnPlayerId || current.currentTurnPlayerId,
-                currentTurnIndex: data.currentTurnIndex ?? current.currentTurnIndex,
-              }
-            : current,
-        );
+        setRoom((current) => (current ? applyTurnChanged(current, data) : current));
         setPhase('SPEECH');
+        setVoteResult(null);
+        setFinalDefense(null);
+        setFinalVote(null);
         return;
       }
 
@@ -421,17 +395,46 @@ export default function App() {
         // Clear game states on new game start
         setRoleInfo(null);
         setGameOverResult(null);
-        setPendingTurn(null);
         setVoteResult(null);
         setVoteState({
           votedCount: 0,
-          totalCount: 0,
           totalVoterCount: 0,
           hasVoted: false,
           canVote: true,
           votablePlayers: [],
         });
         setSpeechLogs([]);
+
+        const hasPlayers = Array.isArray(data.players) && data.players.length > 0;
+        if (!hasPlayers && roomRef.current?.roomCode && !isFetchingGameStartPlayersRef.current) {
+          isFetchingGameStartPlayersRef.current = true;
+          getRoom(roomRef.current.roomCode)
+            .then((freshRoom) => {
+              const normalized = normalizeRoom(freshRoom);
+              const freshPlayers = (normalized.players || []).map((p) => ({
+                ...p,
+                status: 'ALIVE',
+              }));
+              setRoom((current) =>
+                current
+                  ? {
+                      ...current,
+                      status: 'PLAYING',
+                      currentTurnPlayerId,
+                      currentTurnIndex: data.currentTurnIndex ?? 0,
+                      turnOrder: Array.isArray(data.turnOrder) ? data.turnOrder : [],
+                      players: freshPlayers,
+                    }
+                  : current,
+              );
+            })
+            .catch((err) => {
+              console.error("GAME_START 중 플레이어 목록 재조회 실패:", err);
+            })
+            .finally(() => {
+              isFetchingGameStartPlayersRef.current = false;
+            });
+        }
 
         const nextPlayers = (data.players || roomRef.current?.players || []).map((p) => ({
           ...p,
@@ -456,21 +459,22 @@ export default function App() {
 
       if (event?.type === 'VOTE_STARTED') {
         const data = event.data ?? event;
-        const votePlayers = data.players || roomRef.current?.players || [];
+        // 백엔드 VOTE_STARTED 이벤트는 alivePlayers 필드를 사용
+        const alivePlayers = data.alivePlayers || roomRef.current?.players || [];
         setPhase('VOTE');
-        
-        const myPlayer = votePlayers.find((p) => String(p.playerId) === String(playerId));
+
+        const myPlayer = alivePlayers.find((p) => String(p.playerId) === String(playerId));
         const isDead = myPlayer?.status === 'DEAD';
         const isJustRestored = Date.now() - lastRestoredTimeRef.current < 2000;
-        
-        const filteredVotable = votePlayers.filter(
+
+        // 투표 후보: 본인 및 DEAD 제외
+        const filteredVotable = alivePlayers.filter(
           (p) => String(p.playerId) !== String(playerId) && p.status !== 'DEAD'
         );
 
         setVoteState((current) => ({
           votedCount: data.votedCount ?? 0,
-          totalCount: data.totalCount ?? data.totalVoterCount ?? votePlayers.length,
-          totalVoterCount: data.totalVoterCount ?? data.totalCount ?? votePlayers.length,
+          totalVoterCount: data.totalCount ?? alivePlayers.length,
           hasVoted: isJustRestored ? current.hasVoted : false,
           canVote: isDead ? false : (isJustRestored ? current.canVote : true),
           votablePlayers: filteredVotable,
@@ -481,42 +485,7 @@ export default function App() {
             ? {
                 ...current,
                 status: 'VOTING',
-                players: votePlayers,
-                currentTurnPlayerId: null,
-              }
-            : current,
-        );
-        return;
-      }
-
-      if (event?.type === 'VOTING_START') {
-        const data = event.data;
-        const votePlayers = data?.players || roomRef.current?.players || [];
-        setPhase('VOTE');
-        
-        const myPlayer = votePlayers.find((p) => String(p.playerId) === String(playerId));
-        const isDead = myPlayer?.status === 'DEAD';
-        const isJustRestored = Date.now() - lastRestoredTimeRef.current < 2000;
-        
-        const filteredVotable = votePlayers.filter(
-          (p) => String(p.playerId) !== String(playerId) && p.status !== 'DEAD'
-        );
-
-        setVoteState((current) => ({
-          votedCount: data?.votedCount ?? 0,
-          totalCount: data?.totalCount ?? data?.totalVoterCount ?? votePlayers.length,
-          totalVoterCount: data?.totalVoterCount ?? data?.totalCount ?? votePlayers.length,
-          hasVoted: isJustRestored ? current.hasVoted : false,
-          canVote: isDead ? false : (isJustRestored ? current.canVote : true),
-          votablePlayers: filteredVotable,
-        }));
-
-        setRoom((current) =>
-          current
-            ? {
-                ...current,
-                status: 'VOTING',
-                players: votePlayers,
+                players: alivePlayers,
                 currentTurnPlayerId: null,
               }
             : current,
@@ -527,22 +496,14 @@ export default function App() {
       if (event?.type === 'PLAYER_VOTED') {
         const data = event.data ?? event;
         setVoteState((current) => {
-          const rawVoterId = data.voterId ?? data.playerId;
-          const trimmedVoterId = (rawVoterId !== null && rawVoterId !== undefined) ? String(rawVoterId).trim() : '';
-          const trimmedPlayerId = (playerId !== null && playerId !== undefined) ? String(playerId).trim() : '';
-          
-          const isMe = Boolean(
-            trimmedVoterId !== '' &&
-            trimmedPlayerId !== '' &&
-            trimmedVoterId === trimmedPlayerId
-          );
-
+          const voterId = data.voterId != null ? String(data.voterId).trim() : '';
+          const myId = playerId != null ? String(playerId).trim() : '';
+          const isMe = voterId !== '' && myId !== '' && voterId === myId;
           const isDead = roomRef.current?.players?.find(p => String(p.playerId) === String(playerId))?.status === 'DEAD';
           return {
             ...current,
-            votedCount: data.votedCount ?? data.votedPlayerCount ?? current.votedCount,
-            totalCount: data.totalCount ?? current.totalCount,
-            totalVoterCount: data.totalCount ?? current.totalCount,
+            votedCount: data.votedCount ?? current.votedCount,
+            totalVoterCount: data.totalCount ?? current.totalVoterCount,
             hasVoted: isMe ? true : current.hasVoted,
             canVote: isDead ? false : (isMe ? false : current.canVote),
           };
@@ -578,10 +539,43 @@ export default function App() {
         return;
       }
 
+      if (event?.type === 'ROOM_UPDATED') {
+        const data = event.data ?? event;
+        if (data?.roomCode) {
+          setRoom((current) => (current ? { ...current, ...normalizeRoom(data) } : current));
+        }
+        return;
+      }
+
+      if (event?.type === 'SESSION_REPLACED') {
+        setSessionReplacedModal(true);
+        return;
+      }
+
+      if (event?.type === 'FINAL_DEFENSE_STARTED') {
+        const data = event.data ?? event;
+        setFinalDefense({
+          candidatePlayerId: data.candidatePlayerId,
+          durationSeconds: data.durationSeconds || 10,
+          deadlineAt: data.deadlineAt,
+        });
+        setPhase('FINAL_DEFENSE');
+        return;
+      }
+
+      if (event?.type === 'FINAL_VOTE_STARTED') {
+        const data = event.data ?? event;
+        setFinalVote({
+          candidatePlayerId: data.candidatePlayerId,
+          durationSeconds: data.durationSeconds || 10,
+          deadlineAt: data.deadlineAt,
+        });
+        setPhase('FINAL_VOTE');
+        return;
+      }
+
       if (event?.type === 'GAME_OVER') {
         const data = event.data ?? event;
-        console.log('GAME_OVER data 수신:', data);
-        console.log('phase 변경 직전:', phaseRef.current);
         setGameOverResult({
           winner: data.winner,
           reason: data.reason,
@@ -589,7 +583,6 @@ export default function App() {
           liarPlayerNickname: data.liarPlayerNickname,
         });
         setPhase('GAME_OVER');
-        console.log('phase 변경 직후 (예약됨): GAME_OVER');
         return;
       }
 
@@ -613,60 +606,26 @@ export default function App() {
       if (event?.type === 'ERROR') {
         const errMsg = event.message || event.data?.message || '오류가 발생했습니다.';
         setError(errMsg);
-        
-        const isVoteError = errMsg.includes('투표') || errMsg.includes('vote');
-        if (isVoteError && roomRef.current?.roomCode && playerId && playerSecret) {
+        // 투표 오류 시 개인 게임 상태 재조회로 투표 상태 동기화
+        if (roomRef.current?.roomCode && playerId && playerSecret) {
           getPlayerGameState(roomRef.current.roomCode, playerId, playerSecret)
-            .then((response) => {
-              let gameState = response;
-              if (response && typeof response === 'object') {
-                if (response.data !== undefined) {
-                  if (response.data && typeof response.data === 'object' && response.data.data !== undefined) {
-                    gameState = response.data.data;
-                  } else {
-                    gameState = response.data;
-                  }
-                }
-              }
+            .then((gameState) => {
               if (gameState) {
-                let hasVoted = undefined;
-                if (gameState.hasVoted !== undefined) {
-                  hasVoted = gameState.hasVoted;
-                } else if (gameState.isHasVoted !== undefined) {
-                  hasVoted = gameState.isHasVoted;
-                }
-                let canVote = undefined;
-                if (gameState.canVote !== undefined) {
-                  canVote = gameState.canVote;
-                } else if (gameState.isCanVote !== undefined) {
-                  canVote = gameState.isCanVote;
-                }
                 setVoteState((current) => {
                   const nextVoteState = { ...current };
-                  if (hasVoted !== undefined) {
-                    nextVoteState.hasVoted = hasVoted;
-                  }
-                  if (canVote !== undefined) {
-                    nextVoteState.canVote = canVote;
-                  }
-                  if (gameState.votedCount !== undefined) {
-                    nextVoteState.votedCount = gameState.votedCount;
-                  }
-                  const totalVal = gameState.totalVoterCount !== undefined ? gameState.totalVoterCount : gameState.totalCount;
-                  if (totalVal !== undefined) {
-                    nextVoteState.totalCount = totalVal;
-                    nextVoteState.totalVoterCount = totalVal;
-                  }
-                  const nextVotable = (gameState.votablePlayers || []).filter(
+                  if (gameState.hasVoted !== undefined) nextVoteState.hasVoted = gameState.hasVoted;
+                  if (gameState.canVote !== undefined) nextVoteState.canVote = gameState.canVote;
+                  if (gameState.votedCount !== undefined) nextVoteState.votedCount = gameState.votedCount;
+                  if (gameState.totalVoterCount !== undefined) nextVoteState.totalVoterCount = gameState.totalVoterCount;
+                  nextVoteState.votablePlayers = (gameState.voteCandidates || []).filter(
                     (p) => String(p.playerId) !== String(playerId) && p.status !== 'DEAD'
                   );
-                  nextVoteState.votablePlayers = nextVotable;
                   return nextVoteState;
                 });
               }
             })
             .catch((err) => {
-              console.error("에러 발생 후 투표 상태 재동기화 실패:", err);
+              console.error('에러 발생 후 투표 상태 재동기화 실패:', err);
             });
         }
         return;
@@ -732,6 +691,10 @@ export default function App() {
 
   async function handleLeave() {
     const session = getSession();
+    const currentRoomCode = room?.roomCode || session.roomCode;
+    const currentId = playerId || session.playerId;
+    const currentSecret = playerSecret || session.playerSecret;
+
     setLoading(true);
     setError('');
     try {
@@ -741,7 +704,12 @@ export default function App() {
       userSubscriptionRef.current?.unsubscribe();
       userSubscriptionRef.current = null;
 
-      await leaveRoom(session.roomCode, session.playerId);
+      if (currentRoomCode && currentId && currentSecret) {
+        await leaveRoom(currentRoomCode, currentId, currentSecret);
+      }
+    } catch (err) {
+      console.warn('퇴장 API 호출 실패 (로컬 세션 정리 진행):', err.message);
+    } finally {
       clearSession();
       setPlayerId(null);
       setPlayerSecret(null);
@@ -749,18 +717,15 @@ export default function App() {
       setSpeechLogs([]);
       resetGameState();
       setRoom(null);
-      await loadRooms();
-    } catch (err) {
-      setError(err.message);
-    } finally {
       setLoading(false);
+      await loadRooms();
     }
   }
 
   function handleStartGame() {
     try {
       resetGameState();
-      publishJson(stompClientRef.current, `/pub/rooms/${room.roomCode}/start`, { playerId });
+      publishJson(stompClientRef.current, `/pub/rooms/${room.roomCode}/start`, { playerId, playerSecret });
     } catch (err) {
       setError(err.message);
     }
@@ -772,6 +737,7 @@ export default function App() {
     try {
       publishJson(stompClientRef.current, `/pub/rooms/${room.roomCode}/speak`, {
         playerId: speakerId,
+        playerSecret,
         content,
       });
       // 800ms 동안 중복 발언 제출을 방지하기 위한 비동기 딜레이
@@ -788,6 +754,7 @@ export default function App() {
       publishJson(stompClientRef.current, '/pub/game/vote', {
         roomCode: room.roomCode,
         voterId,
+        playerSecret,
         targetPlayerId,
       });
     } catch (err) {
@@ -795,11 +762,45 @@ export default function App() {
     }
   }
 
+  async function handleUpdateSettings({ categoryId, timePreset }) {
+    if (!room?.roomCode || !playerId || !playerSecret) return;
+    try {
+      setLoading(true);
+      await updateRoomSettings(room.roomCode, { playerId, categoryId, timePreset }, playerSecret);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleSkip() {
+    if (!room?.roomCode || !playerId) return;
+    try {
+      publishJson(stompClientRef.current, `/pub/rooms/${room.roomCode}/skip`, { playerId, playerSecret });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function handleFinalVote(decision) {
+    if (!room?.roomCode || !playerId) return;
+    try {
+      publishJson(stompClientRef.current, '/pub/game/final-vote', {
+        roomCode: room.roomCode,
+        voterId: playerId,
+        playerSecret,
+        decision,
+      });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   function resetGameState() {
-    setPhase('SPEECH');
+    setPhase(null);
     setVoteState({
       votedCount: 0,
-      totalCount: 0,
       totalVoterCount: 0,
       hasVoted: false,
       canVote: true,
@@ -807,21 +808,15 @@ export default function App() {
     });
     setVoteResult(null);
     setGameOverResult(null);
-    setPendingTurn(null);
-  }
-
-  function handleConfirmVoteResult() {
-    try {
-      publishJson(stompClientRef.current, `/pub/rooms/${room.roomCode}/next-round`, { playerId });
-    } catch (err) {
-      setError(err.message);
-    }
+    setFinalDefense(null);
+    setFinalVote(null);
   }
 
   function handleConfirmGameOver() {
     setGameOverResult(null);
     setVoteResult(null);
-    setPendingTurn(null);
+    setFinalDefense(null);
+    setFinalVote(null);
     setSpeechLogs([]);
     setRoom((current) =>
       current
@@ -841,15 +836,24 @@ export default function App() {
       room.status === 'PLAYING' ||
       room.status === 'VOTING' ||
       phase === 'VOTE_RESULT' ||
+      phase === 'FINAL_DEFENSE' ||
+      phase === 'FINAL_VOTE' ||
       phase === 'GAME_OVER';
-
-    console.log('shouldShowGameScreen 값:', shouldShowGameScreen);
-    console.log('room.status 값:', room.status);
-    console.log('현재 phase 값:', phase);
 
     return (
       <>
         {error && <div className="toast">{error}</div>}
+        {sessionReplacedModal && (
+          <div className="modalBackdrop">
+            <div className="modal" style={{ textAlign: "center" }}>
+              <p className="eyebrow">Session Replaced</p>
+              <h2>세션 대체 안내</h2>
+              <p style={{ marginTop: "12px", color: "#d8cedf" }}>
+                다른 브라우저 탭에서 접속하여 현재 연결이 종료되었습니다.
+              </p>
+            </div>
+          </div>
+        )}
         {shouldShowGameScreen ? (
           <GameScreen
             room={room}
@@ -857,12 +861,15 @@ export default function App() {
             playerId={playerId}
             speechLogs={speechLogs}
             onSpeak={handleSpeak}
+            onSkip={handleSkip}
             phase={phase}
             voteState={voteState}
             voteResult={voteResult}
             gameOverResult={gameOverResult}
+            finalDefense={finalDefense}
+            finalVote={finalVote}
             onVote={handleVote}
-            onConfirmVoteResult={handleConfirmVoteResult}
+            onFinalVote={handleFinalVote}
             onConfirmGameOver={handleConfirmGameOver}
           />
         ) : (
@@ -871,6 +878,7 @@ export default function App() {
             playerId={playerId}
             onLeave={handleLeave}
             onStart={handleStartGame}
+            onUpdateSettings={handleUpdateSettings}
             loading={loading}
           />
         )}

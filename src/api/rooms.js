@@ -32,17 +32,17 @@ export function getRooms() {
   return request('/api/rooms');
 }
 
-export function createRoom({ nickname, password, maxPlayers }) {
+export function createRoom({ nickname, visibility, maxPlayers }) {
   return request('/api/rooms', {
     method: 'POST',
-    body: JSON.stringify({ nickname, password: password || null, maxPlayers }),
+    body: JSON.stringify({ nickname, visibility: visibility || null, maxPlayers }),
   });
 }
 
-export function joinRoom(roomCode, { nickname, password }) {
+export function joinRoom(roomCode, { nickname }) {
   return request(`/api/rooms/${roomCode}/join`, {
     method: 'POST',
-    body: JSON.stringify({ nickname, password: password || null }),
+    body: JSON.stringify({ nickname }),
   });
 }
 
@@ -50,9 +50,15 @@ export function getRoom(roomCode) {
   return request(`/api/rooms/${roomCode}`);
 }
 
-export function leaveRoom(roomCode, playerId) {
+export function leaveRoom(roomCode, playerId, playerSecret) {
+  if (!roomCode || !playerId || !playerSecret) {
+    throw new Error('퇴장 처리에 필요한 방 정보 또는 인증 키가 유효하지 않습니다.');
+  }
   return request(`/api/rooms/${roomCode}/leave`, {
     method: 'POST',
+    headers: {
+      'X-Player-Secret': playerSecret,
+    },
     body: JSON.stringify({ playerId }),
   });
 }
@@ -66,5 +72,18 @@ export function getPlayerGameState(roomCode, playerId, playerSecret) {
     headers: {
       'X-Player-Secret': playerSecret,
     },
+  });
+}
+
+export function updateRoomSettings(roomCode, { playerId, categoryId, timePreset }, playerSecret) {
+  if (!playerSecret) {
+    throw new Error('playerSecret이 유효하지 않습니다.');
+  }
+  return request(`/api/rooms/${roomCode}/settings`, {
+    method: 'PATCH',
+    headers: {
+      'X-Player-Secret': playerSecret,
+    },
+    body: JSON.stringify({ playerId, categoryId, timePreset }),
   });
 }

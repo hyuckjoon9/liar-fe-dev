@@ -1,4 +1,14 @@
 export default function RoomList({ rooms, loading, onRefresh, onSelectRoom }) {
+  function getStatusLabel(room) {
+    const ls = room.listStatus;
+    if (ls === 'WAITING') return '대기중';
+    if (ls === 'PLAYING') return '게임중';
+    if (ls === 'FULL') return '정원마감';
+    // listStatus 없을 경우 status로 fallback
+    if (room.status === 'WAITING') return '대기중';
+    return '게임중';
+  }
+
   return (
     <section className="panel roomPanel">
       <div className="listHeader">
@@ -14,7 +24,7 @@ export default function RoomList({ rooms, loading, onRefresh, onSelectRoom }) {
         <div className="tableHead">
           <span>방 번호</span>
           <span>인원</span>
-          <span>잠금</span>
+          <span>공개</span>
           <span>상태</span>
           <span></span>
         </div>
@@ -27,8 +37,8 @@ export default function RoomList({ rooms, loading, onRefresh, onSelectRoom }) {
               <span>
                 {room.currentPlayers} / {room.maxPlayers}
               </span>
-              <span>{room.hasPassword ? '비밀번호' : '공개'}</span>
-              <span className="status">{room.status}</span>
+              <span>{room.visibility === 'PRIVATE' ? '비공개' : '공개'}</span>
+              <span className="status">{getStatusLabel(room)}</span>
               <button className="smallButton" type="button" onClick={() => onSelectRoom(room)}>
                 입장
               </button>
