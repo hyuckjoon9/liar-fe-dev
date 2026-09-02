@@ -909,7 +909,13 @@ export default function App() {
       </section>
       <div className="mainGrid">
         <CreateRoomForm onCreate={handleCreate} loading={loading} />
-        <RoomList rooms={rooms} loading={loading} onRefresh={loadRooms} onSelectRoom={setSelectedRoom} />
+        <RoomList
+          rooms={rooms}
+          loading={loading}
+          onRefresh={loadRooms}
+          onSelectRoom={setSelectedRoom}
+          onJoinByCode={handleJoin}
+        />
       </div>
       <JoinRoomModal
         room={selectedRoom}

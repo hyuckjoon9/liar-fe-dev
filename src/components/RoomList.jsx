@@ -1,4 +1,9 @@
-export default function RoomList({ rooms, loading, onRefresh, onSelectRoom }) {
+import { useState } from 'react';
+
+export default function RoomList({ rooms, loading, onRefresh, onSelectRoom, onJoinByCode }) {
+  const [inviteCode, setInviteCode] = useState('');
+  const [nickname, setNickname] = useState('');
+
   function getStatusLabel(room) {
     const ls = room.listStatus;
     if (ls === 'WAITING') return '대기중';
@@ -7,6 +12,14 @@ export default function RoomList({ rooms, loading, onRefresh, onSelectRoom }) {
     // listStatus 없을 경우 status로 fallback
     if (room.status === 'WAITING') return '대기중';
     return '게임중';
+  }
+
+  function handleJoinByCode(event) {
+    event.preventDefault();
+    const roomCode = inviteCode.trim();
+    if (!/^\d{6}$/.test(roomCode)) return;
+
+    onJoinByCode?.(roomCode, { nickname: nickname.trim() });
   }
 
   return (
@@ -46,6 +59,39 @@ export default function RoomList({ rooms, loading, onRefresh, onSelectRoom }) {
           ))
         )}
       </div>
+      <form className="joinByCodeForm" onSubmit={handleJoinByCode}>
+        <div>
+          <p className="eyebrow">Private Room</p>
+          <h3>초대 코드로 입장</h3>
+        </div>
+        <div className="joinByCodeFields">
+          <label>
+            초대 코드
+            <input
+              value={inviteCode}
+              onChange={(event) => setInviteCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+              inputMode="numeric"
+              pattern="\d{6}"
+              maxLength={6}
+              required
+              placeholder="6자리 코드"
+            />
+          </label>
+          <label>
+            닉네임
+            <input
+              value={nickname}
+              onChange={(event) => setNickname(event.target.value)}
+              maxLength={16}
+              required
+              placeholder="표시할 이름"
+            />
+          </label>
+          <button className="primaryButton" type="submit" disabled={loading}>
+            코드로 입장
+          </button>
+        </div>
+      </form>
     </section>
   );
 }
