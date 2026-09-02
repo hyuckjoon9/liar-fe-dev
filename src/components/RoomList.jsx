@@ -14,6 +14,11 @@ export default function RoomList({ rooms, loading, onRefresh, onSelectRoom, onJo
     return '게임중';
   }
 
+  function isJoinable(room) {
+    if (room.listStatus) return room.listStatus === 'WAITING';
+    return room.status === 'WAITING' && room.currentPlayers < room.maxPlayers;
+  }
+
   function handleJoinByCode(event) {
     event.preventDefault();
     const roomCode = inviteCode.trim();
@@ -52,7 +57,7 @@ export default function RoomList({ rooms, loading, onRefresh, onSelectRoom, onJo
               </span>
               <span>{room.visibility === 'PRIVATE' ? '비공개' : '공개'}</span>
               <span className="status">{getStatusLabel(room)}</span>
-              <button className="smallButton" type="button" onClick={() => onSelectRoom(room)}>
+              <button className="smallButton" type="button" onClick={() => onSelectRoom(room)} disabled={loading || !isJoinable(room)}>
                 입장
               </button>
             </div>

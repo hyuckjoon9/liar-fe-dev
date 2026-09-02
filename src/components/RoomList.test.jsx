@@ -22,4 +22,25 @@ describe('RoomList private-room entry', () => {
 
     expect(onJoinByCode).toHaveBeenCalledWith('123456', { nickname: '참가자' });
   });
+
+  it('disables entry for playing and full rooms', () => {
+    render(
+      <RoomList
+        rooms={[
+          { roomCode: '111111', currentPlayers: 2, maxPlayers: 6, visibility: 'PUBLIC', status: 'WAITING', listStatus: 'WAITING' },
+          { roomCode: '222222', currentPlayers: 4, maxPlayers: 6, visibility: 'PUBLIC', status: 'PLAYING', listStatus: 'PLAYING' },
+          { roomCode: '333333', currentPlayers: 6, maxPlayers: 6, visibility: 'PUBLIC', status: 'WAITING', listStatus: 'FULL' },
+        ]}
+        loading={false}
+        onRefresh={vi.fn()}
+        onSelectRoom={vi.fn()}
+        onJoinByCode={vi.fn()}
+      />,
+    );
+
+    const joinButtons = screen.getAllByRole('button', { name: '입장' });
+    expect(joinButtons[0]).toBeEnabled();
+    expect(joinButtons[1]).toBeDisabled();
+    expect(joinButtons[2]).toBeDisabled();
+  });
 });
