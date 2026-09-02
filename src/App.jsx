@@ -22,6 +22,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [wsConnected, setWsConnected] = useState(false);
+  const [connectionVersion, setConnectionVersion] = useState(0);
   const [roleInfo, setRoleInfo] = useState(null);
   const [speechLogs, setSpeechLogs] = useState([]);
   const [phase, setPhase] = useState('SPEECH');
@@ -310,6 +311,7 @@ export default function App() {
 
     client.onConnect = () => {
       setWsConnected(true);
+      setConnectionVersion((current) => current + 1);
       roomsSubscriptionRef.current = subscribeToEvents(client, '/sub/rooms', loadRooms);
     };
 
@@ -597,7 +599,7 @@ export default function App() {
       roomSubscriptionRef.current?.unsubscribe();
       roomSubscriptionRef.current = null;
     };
-  }, [room?.roomCode, wsConnected]);
+  }, [room?.roomCode, wsConnected, connectionVersion]);
 
   useEffect(() => {
     const client = stompClientRef.current;
@@ -648,7 +650,7 @@ export default function App() {
       userSubscriptionRef.current?.unsubscribe();
       userSubscriptionRef.current = null;
     };
-  }, [playerId, wsConnected]);
+  }, [playerId, wsConnected, connectionVersion]);
 
   async function handleCreate(payload) {
     setLoading(true);
