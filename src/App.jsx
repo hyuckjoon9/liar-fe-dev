@@ -37,6 +37,7 @@ export default function App() {
   const [gameOverResult, setGameOverResult] = useState(null);
   const [finalDefense, setFinalDefense] = useState(null);
   const [finalVote, setFinalVote] = useState(null);
+  const [finalVoteErrorVersion, setFinalVoteErrorVersion] = useState(0);
   const [sessionReplacedModal, setSessionReplacedModal] = useState(false);
   const stompClientRef = useRef(null);
   const roomsSubscriptionRef = useRef(null);
@@ -612,6 +613,9 @@ export default function App() {
       if (event?.type === 'ERROR') {
         const errMsg = event.message || event.data?.message || '오류가 발생했습니다.';
         setError(errMsg);
+        if (event.data?.command === 'FINAL_VOTE') {
+          setFinalVoteErrorVersion((current) => current + 1);
+        }
         // 투표 오류 시 개인 게임 상태 재조회로 투표 상태 동기화
         if (roomRef.current?.roomCode && playerId && playerSecret) {
           getPlayerGameState(roomRef.current.roomCode, playerId, playerSecret)
@@ -881,6 +885,7 @@ export default function App() {
             gameOverResult={gameOverResult}
             finalDefense={finalDefense}
             finalVote={finalVote}
+            finalVoteErrorVersion={finalVoteErrorVersion}
             sessionReplaced={sessionReplacedModal}
             onVote={handleVote}
             onFinalVote={handleFinalVote}

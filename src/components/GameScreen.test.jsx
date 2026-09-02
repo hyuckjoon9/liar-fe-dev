@@ -14,29 +14,28 @@ const room = {
   currentTurnPlayerId: null,
 };
 
+const defaultProps = {
+  room,
+  roleInfo: { role: 'CITIZEN', topicWord: '사과' },
+  playerId: 'candidate',
+  speechLogs: [],
+  onSpeak: vi.fn(),
+  onSkip: vi.fn(),
+  phase: 'FINAL_DEFENSE',
+  voteState: {},
+  voteResult: null,
+  gameOverResult: null,
+  finalDefense: { candidatePlayerId: 'candidate' },
+  finalVote: null,
+  onVote: vi.fn(),
+  onFinalVote: vi.fn(),
+  onConfirmVoteResult: vi.fn(),
+  onConfirmGameOver: vi.fn(),
+  onLeave: vi.fn(),
+};
+
 function renderScreen(overrides = {}) {
-  return render(
-    <GameScreen
-      room={room}
-      roleInfo={{ role: 'CITIZEN', topicWord: '사과' }}
-      playerId="candidate"
-      speechLogs={[]}
-      onSpeak={vi.fn()}
-      onSkip={vi.fn()}
-      phase="FINAL_DEFENSE"
-      voteState={{}}
-      voteResult={null}
-      gameOverResult={null}
-      finalDefense={{ candidatePlayerId: 'candidate' }}
-      finalVote={null}
-      onVote={vi.fn()}
-      onFinalVote={vi.fn()}
-      onConfirmVoteResult={vi.fn()}
-      onConfirmGameOver={vi.fn()}
-      onLeave={vi.fn()}
-      {...overrides}
-    />,
-  );
+  return render(<GameScreen {...defaultProps} {...overrides} />);
 }
 
 describe('GameScreen message input', () => {
@@ -92,5 +91,30 @@ describe('GameScreen final vote restoration', () => {
 
     expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeDisabled();
     expect(container.querySelector('.gaugeBar')).toHaveStyle({ width: '50%' });
+  });
+
+  it('re-enables final vote choices when the server rejects the submitted final vote', () => {
+    const props = {
+      playerId: 'other',
+      phase: 'FINAL_VOTE',
+      finalDefense: null,
+      finalVote: {
+        candidatePlayerId: 'candidate',
+        deadlineAt: '2026-08-07T12:00:05.000Z',
+        hasVoted: false,
+        canVote: true,
+      },
+      finalVoteErrorVersion: 0,
+    };
+    const view = renderScreen(props);
+
+    fireEvent.click(screen.getByRole('button', { name: 'KILL (탈락)' }));
+
+    expect(screen.getByText(/투표 완료/)).toBeInTheDocument();
+
+    view.rerender(<GameScreen {...defaultProps} {...props} finalVoteErrorVersion={1} />);
+
+    expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'SAVE (생존)' })).toBeEnabled();
   });
 });

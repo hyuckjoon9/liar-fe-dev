@@ -14,6 +14,7 @@ export default function GameScreen({
   gameOverResult,
   finalDefense,
   finalVote,
+  finalVoteErrorVersion = 0,
   sessionReplaced = false,
   onVote,
   onFinalVote,
@@ -65,6 +66,12 @@ export default function GameScreen({
   useEffect(() => {
     setFinalVoteSubmitted(phase === "FINAL_VOTE" && finalVote?.hasVoted ? true : null);
   }, [phase, finalVote?.hasVoted]);
+
+  useEffect(() => {
+    if (finalVoteErrorVersion > 0) {
+      setFinalVoteSubmitted(null);
+    }
+  }, [finalVoteErrorVersion]);
 
   // 서버의 절대 마감 시각을 기준으로 최후 단계 게이지를 계산한다.
   useEffect(() => {
