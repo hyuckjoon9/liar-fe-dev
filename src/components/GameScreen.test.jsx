@@ -33,6 +33,7 @@ function renderScreen(overrides = {}) {
       onFinalVote={vi.fn()}
       onConfirmVoteResult={vi.fn()}
       onConfirmGameOver={vi.fn()}
+      onLeave={vi.fn()}
       {...overrides}
     />,
   );
@@ -56,6 +57,15 @@ describe('GameScreen message input', () => {
 
     expect(screen.getByRole('textbox')).toBeDisabled();
     expect(screen.getByRole('button', { name: '입력' })).toBeDisabled();
+  });
+
+  it('leaves the room from the game screen', () => {
+    const onLeave = vi.fn();
+    renderScreen({ onLeave });
+
+    fireEvent.click(screen.getByRole('button', { name: '나가기' }));
+
+    expect(onLeave).toHaveBeenCalledOnce();
   });
 });
 

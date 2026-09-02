@@ -18,6 +18,8 @@ export default function GameScreen({
   onVote,
   onFinalVote,
   onConfirmGameOver,
+  onLeave,
+  loading = false,
 }) {
   const [content, setContent] = useState("");
   const [finalVoteSubmitted, setFinalVoteSubmitted] = useState(null); // "KILL" | "SAVE" | null
@@ -142,6 +144,11 @@ export default function GameScreen({
       </section>
 
       <section className="panel gamePanel">
+        <div className="gameActions">
+          <button className="ghostButton" type="button" onClick={onLeave} disabled={loading || sessionReplaced}>
+            나가기
+          </button>
+        </div>
         {/* 역할/제시어 + 턴 정보 */}
         <div className="gameGrid">
           <div>

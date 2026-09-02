@@ -885,6 +885,8 @@ export default function App() {
             onVote={handleVote}
             onFinalVote={handleFinalVote}
             onConfirmGameOver={handleConfirmGameOver}
+            onLeave={handleLeave}
+            loading={loading}
           />
         ) : (
           <Lobby
