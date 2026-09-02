@@ -1,6 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import GameScreen from './GameScreen';
+
+afterEach(cleanup);
 
 const room = {
   roomCode: '123456',
@@ -47,6 +49,13 @@ describe('GameScreen message input', () => {
     fireEvent.change(input, { target: { value: '변론' } });
 
     expect(screen.getByText('2 / 200')).toBeInTheDocument();
+  });
+
+  it('disables game commands after the session is replaced', () => {
+    renderScreen({ sessionReplaced: true });
+
+    expect(screen.getByRole('textbox')).toBeDisabled();
+    expect(screen.getByRole('button', { name: '입력' })).toBeDisabled();
   });
 });
 

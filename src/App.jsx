@@ -549,6 +549,10 @@ export default function App() {
 
       if (event?.type === 'SESSION_REPLACED') {
         setSessionReplacedModal(true);
+        client.deactivate();
+        if (stompClientRef.current === client) {
+          stompClientRef.current = null;
+        }
         return;
       }
 
@@ -690,6 +694,7 @@ export default function App() {
   }
 
   async function handleLeave() {
+    if (sessionReplacedModal) return;
     const session = getSession();
     const currentRoomCode = room?.roomCode || session.roomCode;
     const currentId = playerId || session.playerId;
@@ -723,6 +728,7 @@ export default function App() {
   }
 
   function handleStartGame() {
+    if (sessionReplacedModal) return;
     try {
       resetGameState();
       publishJson(stompClientRef.current, `/pub/rooms/${room.roomCode}/start`, { playerId, playerSecret });
@@ -732,6 +738,7 @@ export default function App() {
   }
 
   async function handleSpeak(content, speakerId = playerId) {
+    if (sessionReplacedModal) return;
     if (isSpeakingRef.current) return;
     isSpeakingRef.current = true;
     try {
@@ -750,6 +757,7 @@ export default function App() {
   }
 
   function handleVote(targetPlayerId, voterId = playerId) {
+    if (sessionReplacedModal) return;
     try {
       publishJson(stompClientRef.current, '/pub/game/vote', {
         roomCode: room.roomCode,
@@ -763,6 +771,7 @@ export default function App() {
   }
 
   async function handleUpdateSettings({ categoryId, timePreset }) {
+    if (sessionReplacedModal) return;
     if (!room?.roomCode || !playerId || !playerSecret) return;
     try {
       setLoading(true);
@@ -775,6 +784,7 @@ export default function App() {
   }
 
   function handleSkip() {
+    if (sessionReplacedModal) return;
     if (!room?.roomCode || !playerId) return;
     try {
       publishJson(stompClientRef.current, `/pub/rooms/${room.roomCode}/skip`, { playerId, playerSecret });
@@ -784,6 +794,7 @@ export default function App() {
   }
 
   function handleFinalVote(decision) {
+    if (sessionReplacedModal) return;
     if (!room?.roomCode || !playerId) return;
     try {
       publishJson(stompClientRef.current, '/pub/game/final-vote', {
@@ -868,6 +879,7 @@ export default function App() {
             gameOverResult={gameOverResult}
             finalDefense={finalDefense}
             finalVote={finalVote}
+            sessionReplaced={sessionReplacedModal}
             onVote={handleVote}
             onFinalVote={handleFinalVote}
             onConfirmGameOver={handleConfirmGameOver}
@@ -876,6 +888,7 @@ export default function App() {
           <Lobby
             room={room}
             playerId={playerId}
+            sessionReplaced={sessionReplacedModal}
             onLeave={handleLeave}
             onStart={handleStartGame}
             onUpdateSettings={handleUpdateSettings}

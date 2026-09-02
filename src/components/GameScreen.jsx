@@ -14,6 +14,7 @@ export default function GameScreen({
   gameOverResult,
   finalDefense,
   finalVote,
+  sessionReplaced = false,
   onVote,
   onFinalVote,
   onConfirmGameOver,
@@ -34,8 +35,9 @@ export default function GameScreen({
   const myNickname = myPlayer?.nickname || "";
   const isDead = !myPlayer || myPlayer.status === "DEAD";
 
-  const isMyTurn = !isDead && !!myPlayerId && !!currentTurnPlayerId && currentTurnPlayerId === myPlayerId;
+  const isMyTurn = !sessionReplaced && !isDead && !!myPlayerId && !!currentTurnPlayerId && currentTurnPlayerId === myPlayerId;
   const isFinalDefenseCandidate =
+    !sessionReplaced &&
     phase === "FINAL_DEFENSE" &&
     !!finalDefense?.candidatePlayerId &&
     normalizeId(finalDefense.candidatePlayerId) === myPlayerId;
@@ -51,6 +53,7 @@ export default function GameScreen({
 
   const timedPhaseState = phase === "FINAL_DEFENSE" ? finalDefense : phase === "FINAL_VOTE" ? finalVote : null;
   const canSubmitFinalVote =
+    !sessionReplaced &&
     !isDead &&
     normalizeId(finalVote?.candidatePlayerId) !== myPlayerId &&
     !finalVoteSubmitted &&
@@ -101,13 +104,13 @@ export default function GameScreen({
   function submit(event) {
     event.preventDefault();
     const value = content.trim();
-    if (!value || !canInput || isDead) return;
+    if (!value || !canInput || isDead || sessionReplaced) return;
     onSpeak(value, myPlayerId);
     setContent("");
   }
 
   function handleFinalVoteClick(decision) {
-    if (!canSubmitFinalVote) return;
+    if (!canSubmitFinalVote || sessionReplaced) return;
     setFinalVoteSubmitted(decision);
     onFinalVote?.(decision);
   }
@@ -215,7 +218,7 @@ export default function GameScreen({
                     className="smallButton"
                     type="button"
                     onClick={() => onVote(player.playerId, playerId)}
-                    disabled={voteState.hasVoted || !voteState.canVote || !playerId || isDead}
+                    disabled={sessionReplaced || voteState.hasVoted || !voteState.canVote || !playerId || isDead}
                   >
                     투표하기
                   </button>

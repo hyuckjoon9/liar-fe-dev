@@ -1,4 +1,4 @@
-export default function Lobby({ room, playerId, onLeave, onStart, onUpdateSettings, loading }) {
+export default function Lobby({ room, playerId, onLeave, onStart, onUpdateSettings, loading, sessionReplaced = false }) {
   const players = room.players || [];
   const me = players.find((player) => String(player.playerId) === String(playerId));
   const isHost = Boolean(me?.host);
@@ -36,7 +36,7 @@ export default function Lobby({ room, playerId, onLeave, onStart, onUpdateSettin
             <div className="settingsGrid">
               <label>
                 카테고리
-                <select value={currentCategory} onChange={handleCategoryChange} disabled={loading}>
+                <select value={currentCategory} onChange={handleCategoryChange} disabled={loading || sessionReplaced}>
                   <option value="RANDOM">랜덤 (전체)</option>
                   <option value="FOOD">음식</option>
                   <option value="ANIMAL">동물</option>
@@ -47,7 +47,7 @@ export default function Lobby({ room, playerId, onLeave, onStart, onUpdateSettin
               </label>
               <label>
                 제한 시간 프리셋
-                <select value={currentTimePreset} onChange={handleTimePresetChange} disabled={loading}>
+                <select value={currentTimePreset} onChange={handleTimePresetChange} disabled={loading || sessionReplaced}>
                   <option value="FAST">빠름 (발언 15초 / 투표 20초)</option>
                   <option value="STANDARD">표준 (발언 30초 / 투표 30초)</option>
                   <option value="RELAXED">느림 (발언 45초 / 투표 45초)</option>
@@ -63,10 +63,10 @@ export default function Lobby({ room, playerId, onLeave, onStart, onUpdateSettin
             <h2>플레이어 목록</h2>
           </div>
           <div className="lobbyActions">
-            <button className="ghostButton" type="button" onClick={onLeave} disabled={loading}>
+            <button className="ghostButton" type="button" onClick={onLeave} disabled={loading || sessionReplaced}>
               나가기
             </button>
-            <button className="primaryButton" type="button" onClick={onStart} disabled={!isHost || loading}>
+            <button className="primaryButton" type="button" onClick={onStart} disabled={!isHost || loading || sessionReplaced}>
               게임 시작
             </button>
           </div>
