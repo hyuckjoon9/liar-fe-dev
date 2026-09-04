@@ -219,6 +219,64 @@ describe('App STOMP reconnection', () => {
     expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeDisabled();
   });
 
+  it('unlocks an eligible voter when a new FINAL_VOTE_STARTED event follows a failed resync', async () => {
+    sessionStorage.setItem('liar.roomCode', '123456');
+    sessionStorage.setItem('liar.playerId', 'player-1');
+    sessionStorage.setItem('liar.playerSecret', 'secret');
+    mocks.createStompClient.mockReturnValue(mocks.client);
+    const finalVoteRoom = {
+      ...defaultRoom,
+      status: 'VOTING',
+      game: {
+        phase: 'FINAL_VOTE',
+        finalCandidateId: 'player-2',
+        finalDeadlineAt: '2027-09-02T23:30:00.000Z',
+      },
+    };
+    mocks.getRoom
+      .mockResolvedValueOnce(finalVoteRoom)
+      .mockRejectedValueOnce(new Error('네트워크 오류'));
+    mocks.getPlayerGameState.mockResolvedValue({
+      ...defaultGameState,
+      phase: 'FINAL_VOTE',
+      finalCandidateId: 'player-2',
+      finalDeadlineAt: '2027-09-02T23:30:00.000Z',
+      hasFinalVoted: false,
+      canFinalVote: true,
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(mocks.client.activate).toHaveBeenCalled());
+    act(() => {
+      mocks.client.connected = true;
+      mocks.client.onConnect();
+    });
+    await screen.findByRole('button', { name: 'KILL (탈락)' });
+
+    const userSubscription = mocks.subscribeToEvents.mock.calls.find(
+      ([, destination]) => destination === '/sub/users/player-1',
+    );
+    act(() => userSubscription[2]({ type: 'ERROR', data: { command: 'FINAL_VOTE' }, message: '투표가 거절되었습니다.' }));
+    await waitFor(() => expect(mocks.getRoom).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeDisabled();
+
+    const roomSubscription = mocks.subscribeToEvents.mock.calls.find(
+      ([, destination]) => destination === '/sub/rooms/123456',
+    );
+    await act(async () => {
+      await roomSubscription[2]({
+        type: 'FINAL_VOTE_STARTED',
+        data: {
+          candidatePlayerId: 'player-2',
+          deadlineAt: '2027-09-02T23:30:00.000Z',
+        },
+      });
+    });
+
+    expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeEnabled();
+  });
+
   it('runs a queued FINAL_VOTE resync after an active room load finishes', async () => {
     sessionStorage.setItem('liar.roomCode', '123456');
     sessionStorage.setItem('liar.playerId', 'player-1');

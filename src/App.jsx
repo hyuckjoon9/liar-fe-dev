@@ -52,6 +52,7 @@ export default function App() {
   const finalVoteResyncHandledRef = useRef(0);
   const finalVoteResyncWorkerRef = useRef(false);
   const finalVoteResyncRoomCodeRef = useRef(null);
+  const finalVoteResyncGenerationRef = useRef(0);
   const isRestoringRef = useRef(false);
   const lastRestoredTimeRef = useRef(0);
   const isSpeakingRef = useRef(false);
@@ -305,6 +306,7 @@ export default function App() {
   }
 
   async function syncFinalVoteState(roomCode) {
+    const generation = finalVoteResyncGenerationRef.current;
     finalVoteResyncRoomCodeRef.current = roomCode;
     finalVoteResyncRequestedRef.current += 1;
     setFinalVoteSyncing(true);
@@ -314,7 +316,8 @@ export default function App() {
     finalVoteResyncWorkerRef.current = true;
     let failed = false;
     try {
-      while (finalVoteResyncHandledRef.current < finalVoteResyncRequestedRef.current) {
+      while (generation === finalVoteResyncGenerationRef.current &&
+        finalVoteResyncHandledRef.current < finalVoteResyncRequestedRef.current) {
         const requestVersion = finalVoteResyncRequestedRef.current;
         const result = await loadRoom(finalVoteResyncRoomCodeRef.current);
         if (result === 'loaded') {
@@ -326,7 +329,7 @@ export default function App() {
       }
     } finally {
       finalVoteResyncWorkerRef.current = false;
-      if (!failed) setFinalVoteSyncing(false);
+      if (!failed && generation === finalVoteResyncGenerationRef.current) setFinalVoteSyncing(false);
     }
   }
 
@@ -633,6 +636,11 @@ export default function App() {
 
       if (event?.type === 'FINAL_VOTE_STARTED') {
         const data = event.data ?? event;
+        finalVoteResyncGenerationRef.current += 1;
+        finalVoteResyncRequestedRef.current = 0;
+        finalVoteResyncHandledRef.current = 0;
+        finalVoteResyncRoomCodeRef.current = null;
+        setFinalVoteSyncing(false);
         setFinalVote({
           candidatePlayerId: data.candidatePlayerId,
           durationSeconds: data.durationSeconds || 10,
