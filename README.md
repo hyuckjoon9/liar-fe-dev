@@ -32,6 +32,8 @@ npm run build
 
 프로젝트 관련 세부 문서 및 계약 사항은 `docs/` 디렉터리에서 확인할 수 있다.
 
+백엔드 API·WebSocket 계약의 기준 문서는 [liar-be-dev](https://hyuckjoon9.github.io/liar-be-dev)이다. 저장소의 [`docs/be_docs/`](docs/be_docs/)는 해당 문서의 읽기 전용 동기화 사본이다.
+
 - [아키텍처](docs/architecture.md): 프론트엔드 모듈 구조, 컴포넌트 계층, 상태 관리 및 런타임 경계
 - [게임 규칙 및 UI 흐름](docs/game-flow.md): 구현된 게임 규칙, UI 페이즈 전이 및 새로고침 복원 메커니즘
 - [REST API 계약](docs/rest-api.md): HTTP API 호출 스펙 및 `X-Player-Secret` 인증 연동

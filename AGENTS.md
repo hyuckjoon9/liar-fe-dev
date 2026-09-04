@@ -14,6 +14,7 @@
 ## 문서 작업
 
 - 문서 전용 요청에서는 React, Vite, npm, JavaScript, JSX, CSS 설정 및 코드 파일을 수정하지 않는다.
+- 백엔드 API·WebSocket 계약을 확인해야 할 때의 기준 문서는 [liar-be-dev](https://hyuckjoon9.github.io/liar-be-dev)이다. `docs/be_docs/`는 이 기준 문서의 읽기 전용 동기화 사본으로만 취급한다.
 - `docs/be_docs/` 폴더는 백엔드 문서 동기화용 원본으로 100% 읽기 전용이다. 절대 수정, 생성, 삭제하지 않고 참조만 수행한다.
 - UI 디자인 작업 시 카드 형태 스타일은 최외각 영역(`.panel`, `.modal`)에서만 사용하며, 내부 요소에는 중첩 카드(nested card) 디자인을 사용하지 않는다.
 - 경계선 및 구분선은 전달하는 텍스트보다 튀지 않도록 저대비(low contrast), 미세 투명도의 은은한 스타일만 사용한다.

@@ -1,6 +1,6 @@
 # 테스트와 검증
 
-이 문서는 라이어 게임 프론트엔드의 빌드 검증 방법과 수동 회귀 테스트(Manual Regression Testing) 시나리오 체크리스트를 정의한다. 백엔드 테스트 사양은 [testing.md](be_docs/testing.md)를 참조한다.
+이 문서는 라이어 게임 프론트엔드의 빌드 검증 방법과 수동 회귀 테스트(Manual Regression Testing) 시나리오 체크리스트를 정의한다. 백엔드 테스트 사양은 [liar-be-dev](https://hyuckjoon9.github.io/liar-be-dev) 및 읽기 전용 동기화 사본인 [testing.md](be_docs/testing.md)를 참조한다.
 
 ## 자동 빌드 검증
 
@@ -18,9 +18,9 @@ npm run build
 
 ### 1. 방 생명주기 및 대기실 테스트
 
-- [ ] **방 생성**: 방 생성 폼에서 닉네임, 비밀번호 사용 여부, 최대 인원을 입력하고 방을 생성한다. 응답으로 받은 `roomCode`, `playerId`, `playerSecret`이 정상 저장되는지 확인한다.
+- [ ] **방 생성**: 방 생성 폼에서 닉네임, 공개/비공개(`visibility`), 최대 인원을 입력하고 방을 생성한다. 응답으로 받은 `roomCode`, `playerId`, `playerSecret`이 정상 저장되는지 확인한다.
 - [ ] **닉네임 번호 부여**: 입력한 닉네임 뒤에 서버 부여 `#0000` 번호가 정상 표출되는지 확인한다.
-- [ ] **방 목록 조회**: 공개방 생성 시 전체 방 목록(`RoomList.jsx`)에 방이 노출되고, 비밀번호 사용 방은 '비밀번호'로 표시됨을 확인한다.
+- [ ] **방 목록 조회**: 공개방 생성 시 전체 방 목록(`RoomList.jsx`)에 방이 노출되고, 비공개방은 목록에 노출되지 않음을 확인한다.
 - [ ] **방 설정 변경**: 대기실(`Lobby.jsx`)에서 방장이 카테고리(`FOOD`, `ANIMAL`, `PLACE`, `JOB`, `COUNTRY`, `RANDOM`) 및 시간 제한 프리셋(`FAST`, `STANDARD`, `RELAXED`)을 변경할 때 `PATCH /api/rooms/{roomCode}/settings`가 정상 전송되고 참가자 전원에게 갱신되는지 확인한다.
 - [ ] **방장 위임 및 퇴장**: 방장이 퇴장할 경우 입장 순서가 빠른 남은 플레이어에게 방장 권한이 정상 위임되고 '게임 시작' 및 '게임 설정' 컨트롤이 활성화되는지 확인한다.
 
