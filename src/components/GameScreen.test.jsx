@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import GameScreen from './GameScreen';
 
@@ -93,6 +93,29 @@ describe('GameScreen final vote restoration', () => {
     expect(container.querySelector('.gaugeBar')).toHaveStyle({ width: '50%' });
   });
 
+  it('disables final vote choices once the absolute deadline passes', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-07T12:00:00.000Z'));
+
+    renderScreen({
+      playerId: 'other',
+      phase: 'FINAL_VOTE',
+      finalDefense: null,
+      finalVote: {
+        candidatePlayerId: 'candidate',
+        deadlineAt: '2026-08-07T12:00:05.000Z',
+        hasVoted: false,
+        canVote: true,
+      },
+    });
+
+    expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeEnabled();
+
+    act(() => vi.advanceTimersByTime(5_000));
+
+    expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeDisabled();
+  });
+
   it('re-enables final vote choices when the server rejects the submitted final vote', () => {
     const props = {
       playerId: 'other',
@@ -100,7 +123,7 @@ describe('GameScreen final vote restoration', () => {
       finalDefense: null,
       finalVote: {
         candidatePlayerId: 'candidate',
-        deadlineAt: '2026-08-07T12:00:05.000Z',
+        deadlineAt: '2099-08-07T12:00:05.000Z',
         hasVoted: false,
         canVote: true,
       },

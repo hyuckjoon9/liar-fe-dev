@@ -15,6 +15,7 @@ export default function GameScreen({
   finalDefense,
   finalVote,
   finalVoteErrorVersion = 0,
+  finalVoteSyncing = false,
   sessionReplaced = false,
   onVote,
   onFinalVote,
@@ -55,8 +56,12 @@ export default function GameScreen({
   ).filter((p) => p.status !== "DEAD" && normalizeId(p.playerId) !== myPlayerId);
 
   const timedPhaseState = phase === "FINAL_DEFENSE" ? finalDefense : phase === "FINAL_VOTE" ? finalVote : null;
+  const finalVoteDeadlineMs = finalVote?.deadlineAt ? new Date(finalVote.deadlineAt).getTime() : NaN;
+  const isFinalVoteExpired = phase === "FINAL_VOTE" && Number.isFinite(finalVoteDeadlineMs) && finalVoteDeadlineMs <= Date.now();
   const canSubmitFinalVote =
     !sessionReplaced &&
+    !finalVoteSyncing &&
+    !isFinalVoteExpired &&
     !isDead &&
     normalizeId(finalVote?.candidatePlayerId) !== myPlayerId &&
     !finalVoteSubmitted &&

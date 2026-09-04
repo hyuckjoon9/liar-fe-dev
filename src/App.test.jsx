@@ -77,7 +77,7 @@ describe('App STOMP reconnection', () => {
     });
   });
 
-  it('re-enables final vote after a FINAL_VOTE command error', async () => {
+  it('keeps final vote choices disabled when FINAL_VOTE resync says voting is no longer allowed', async () => {
     sessionStorage.setItem('liar.roomCode', '123456');
     sessionStorage.setItem('liar.playerId', 'player-1');
     sessionStorage.setItem('liar.playerSecret', 'secret');
@@ -88,16 +88,23 @@ describe('App STOMP reconnection', () => {
       game: {
         phase: 'FINAL_VOTE',
         finalCandidateId: 'player-2',
-        finalDeadlineAt: '2026-09-02T23:30:00.000Z',
+        finalDeadlineAt: '2027-09-02T23:30:00.000Z',
       },
     });
-    mocks.getPlayerGameState.mockResolvedValue({
+    const initialFinalVoteState = {
       ...defaultGameState,
       finalCandidateId: 'player-2',
-      finalDeadlineAt: '2026-09-02T23:30:00.000Z',
+      finalDeadlineAt: '2027-09-02T23:30:00.000Z',
       hasFinalVoted: false,
       canFinalVote: true,
-    });
+    };
+    const expiredFinalVoteState = {
+      ...initialFinalVoteState,
+      canFinalVote: false,
+    };
+    mocks.getPlayerGameState
+      .mockResolvedValueOnce(initialFinalVoteState)
+      .mockResolvedValueOnce(expiredFinalVoteState);
 
     render(<App />);
 
@@ -116,7 +123,249 @@ describe('App STOMP reconnection', () => {
     );
     act(() => userSubscription[2]({ type: 'ERROR', data: { command: 'FINAL_VOTE' }, message: '투표가 거절되었습니다.' }));
 
+    await waitFor(() => expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeDisabled());
+  });
+
+  it('keeps final vote choices locked while FINAL_VOTE resync is pending', async () => {
+    sessionStorage.setItem('liar.roomCode', '123456');
+    sessionStorage.setItem('liar.playerId', 'player-1');
+    sessionStorage.setItem('liar.playerSecret', 'secret');
+    mocks.createStompClient.mockReturnValue(mocks.client);
+    mocks.getRoom.mockResolvedValue({
+      ...defaultRoom,
+      status: 'VOTING',
+      game: {
+        phase: 'FINAL_VOTE',
+        finalCandidateId: 'player-2',
+        finalDeadlineAt: '2027-09-02T23:30:00.000Z',
+      },
+    });
+    const finalVoteState = {
+      ...defaultGameState,
+      phase: 'FINAL_VOTE',
+      finalCandidateId: 'player-2',
+      finalDeadlineAt: '2027-09-02T23:30:00.000Z',
+      hasFinalVoted: false,
+      canFinalVote: true,
+    };
+    const resync = deferred();
+    mocks.getPlayerGameState
+      .mockResolvedValueOnce(finalVoteState)
+      .mockImplementationOnce(() => resync.promise);
+
+    render(<App />);
+
+    await waitFor(() => expect(mocks.client.activate).toHaveBeenCalled());
+    act(() => {
+      mocks.client.connected = true;
+      mocks.client.onConnect();
+    });
+
+    const killButton = await screen.findByRole('button', { name: 'KILL (탈락)' });
+    fireEvent.click(killButton);
+    const userSubscription = mocks.subscribeToEvents.mock.calls.find(
+      ([, destination]) => destination === '/sub/users/player-1',
+    );
+    act(() => userSubscription[2]({ type: 'ERROR', data: { command: 'FINAL_VOTE' }, message: '투표가 거절되었습니다.' }));
+
+    expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeDisabled();
+
+    await act(async () => resync.resolve(finalVoteState));
+
     await waitFor(() => expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeEnabled());
+  });
+
+  it('keeps final vote choices locked when FINAL_VOTE resync fails', async () => {
+    sessionStorage.setItem('liar.roomCode', '123456');
+    sessionStorage.setItem('liar.playerId', 'player-1');
+    sessionStorage.setItem('liar.playerSecret', 'secret');
+    mocks.createStompClient.mockReturnValue(mocks.client);
+    const finalVoteRoom = {
+      ...defaultRoom,
+      status: 'VOTING',
+      game: {
+        phase: 'FINAL_VOTE',
+        finalCandidateId: 'player-2',
+        finalDeadlineAt: '2027-09-02T23:30:00.000Z',
+      },
+    };
+    mocks.getRoom
+      .mockResolvedValueOnce(finalVoteRoom)
+      .mockRejectedValueOnce(new Error('네트워크 오류'));
+    mocks.getPlayerGameState.mockResolvedValue({
+      ...defaultGameState,
+      phase: 'FINAL_VOTE',
+      finalCandidateId: 'player-2',
+      finalDeadlineAt: '2027-09-02T23:30:00.000Z',
+      hasFinalVoted: false,
+      canFinalVote: true,
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(mocks.client.activate).toHaveBeenCalled());
+    act(() => {
+      mocks.client.connected = true;
+      mocks.client.onConnect();
+    });
+    await screen.findByRole('button', { name: 'KILL (탈락)' });
+
+    const userSubscription = mocks.subscribeToEvents.mock.calls.find(
+      ([, destination]) => destination === '/sub/users/player-1',
+    );
+    act(() => userSubscription[2]({ type: 'ERROR', data: { command: 'FINAL_VOTE' }, message: '투표가 거절되었습니다.' }));
+
+    await waitFor(() => expect(mocks.getRoom).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeDisabled();
+  });
+
+  it('runs a queued FINAL_VOTE resync after an active room load finishes', async () => {
+    sessionStorage.setItem('liar.roomCode', '123456');
+    sessionStorage.setItem('liar.playerId', 'player-1');
+    sessionStorage.setItem('liar.playerSecret', 'secret');
+    mocks.createStompClient.mockReturnValue(mocks.client);
+    const finalVoteRoom = {
+      ...defaultRoom,
+      status: 'VOTING',
+      game: {
+        phase: 'FINAL_VOTE',
+        finalCandidateId: 'player-2',
+        finalDeadlineAt: '2027-09-02T23:30:00.000Z',
+      },
+    };
+    const finalVoteState = {
+      ...defaultGameState,
+      phase: 'FINAL_VOTE',
+      finalCandidateId: 'player-2',
+      finalDeadlineAt: '2027-09-02T23:30:00.000Z',
+      hasFinalVoted: false,
+      canFinalVote: true,
+    };
+    const activeLoad = deferred();
+    const resyncLoad = deferred();
+    mocks.getRoom
+      .mockResolvedValueOnce(finalVoteRoom)
+      .mockImplementationOnce(() => activeLoad.promise)
+      .mockImplementationOnce(() => resyncLoad.promise);
+    mocks.getPlayerGameState.mockResolvedValue(finalVoteState);
+
+    render(<App />);
+
+    await waitFor(() => expect(mocks.client.activate).toHaveBeenCalled());
+    act(() => {
+      mocks.client.connected = true;
+      mocks.client.onConnect();
+    });
+    await screen.findByRole('button', { name: 'KILL (탈락)' });
+
+    const roomSubscription = mocks.subscribeToEvents.mock.calls.find(
+      ([, destination]) => destination === '/sub/rooms/123456',
+    );
+    act(() => {
+      void roomSubscription[2]({ type: 'UNRECOGNIZED_EVENT' });
+    });
+    await waitFor(() => expect(mocks.getRoom).toHaveBeenCalledTimes(2));
+
+    const userSubscription = mocks.subscribeToEvents.mock.calls.find(
+      ([, destination]) => destination === '/sub/users/player-1',
+    );
+    act(() => userSubscription[2]({ type: 'ERROR', data: { command: 'FINAL_VOTE' }, message: '투표가 거절되었습니다.' }));
+    expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeDisabled();
+
+    await act(async () => activeLoad.resolve(finalVoteRoom));
+    await waitFor(() => expect(mocks.getRoom).toHaveBeenCalledTimes(3));
+    expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeDisabled();
+
+    await act(async () => resyncLoad.resolve(finalVoteRoom));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'KILL (탈락)' })).toBeEnabled());
+  });
+
+  it('leaves the final vote screen when FINAL_VOTE resync finds a later phase', async () => {
+    sessionStorage.setItem('liar.roomCode', '123456');
+    sessionStorage.setItem('liar.playerId', 'player-1');
+    sessionStorage.setItem('liar.playerSecret', 'secret');
+    mocks.createStompClient.mockReturnValue(mocks.client);
+    const finalVoteRoom = {
+      ...defaultRoom,
+      status: 'VOTING',
+      game: {
+        phase: 'FINAL_VOTE',
+        finalCandidateId: 'player-2',
+        finalDeadlineAt: '2027-09-02T23:30:00.000Z',
+      },
+    };
+    mocks.getRoom
+      .mockResolvedValueOnce(finalVoteRoom)
+      .mockResolvedValueOnce({ ...defaultRoom, status: 'VOTING', game: { phase: 'VOTE' } });
+    mocks.getPlayerGameState
+      .mockResolvedValueOnce({
+        ...defaultGameState,
+        phase: 'FINAL_VOTE',
+        finalCandidateId: 'player-2',
+        finalDeadlineAt: '2027-09-02T23:30:00.000Z',
+        hasFinalVoted: false,
+        canFinalVote: true,
+      })
+      .mockResolvedValueOnce({ ...defaultGameState, phase: 'VOTE' });
+
+    render(<App />);
+
+    await waitFor(() => expect(mocks.client.activate).toHaveBeenCalled());
+    act(() => {
+      mocks.client.connected = true;
+      mocks.client.onConnect();
+    });
+    await screen.findByRole('button', { name: 'KILL (탈락)' });
+
+    const userSubscription = mocks.subscribeToEvents.mock.calls.find(
+      ([, destination]) => destination === '/sub/users/player-1',
+    );
+    act(() => userSubscription[2]({ type: 'ERROR', data: { command: 'FINAL_VOTE' }, message: '투표가 거절되었습니다.' }));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'KILL (탈락)' })).not.toBeInTheDocument());
+  });
+
+  it('uses the refreshed player phase when the room snapshot still says FINAL_VOTE', async () => {
+    sessionStorage.setItem('liar.roomCode', '123456');
+    sessionStorage.setItem('liar.playerId', 'player-1');
+    sessionStorage.setItem('liar.playerSecret', 'secret');
+    mocks.createStompClient.mockReturnValue(mocks.client);
+    const finalVoteRoom = {
+      ...defaultRoom,
+      status: 'VOTING',
+      game: {
+        phase: 'FINAL_VOTE',
+        finalCandidateId: 'player-2',
+        finalDeadlineAt: '2027-09-02T23:30:00.000Z',
+      },
+    };
+    mocks.getRoom.mockResolvedValue(finalVoteRoom);
+    mocks.getPlayerGameState
+      .mockResolvedValueOnce({
+        ...defaultGameState,
+        phase: 'FINAL_VOTE',
+        finalCandidateId: 'player-2',
+        finalDeadlineAt: '2027-09-02T23:30:00.000Z',
+        hasFinalVoted: false,
+        canFinalVote: true,
+      })
+      .mockResolvedValueOnce({ ...defaultGameState, phase: 'VOTE' });
+
+    render(<App />);
+
+    await waitFor(() => expect(mocks.client.activate).toHaveBeenCalled());
+    act(() => {
+      mocks.client.connected = true;
+      mocks.client.onConnect();
+    });
+    await screen.findByRole('button', { name: 'KILL (탈락)' });
+
+    const userSubscription = mocks.subscribeToEvents.mock.calls.find(
+      ([, destination]) => destination === '/sub/users/player-1',
+    );
+    act(() => userSubscription[2]({ type: 'ERROR', data: { command: 'FINAL_VOTE' }, message: '투표가 거절되었습니다.' }));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'KILL (탈락)' })).not.toBeInTheDocument());
   });
 });
 
@@ -143,4 +392,12 @@ const defaultGameState = {
 
 function subscriptionCount(destination) {
   return mocks.subscribeToEvents.mock.calls.filter(([, subscribedDestination]) => subscribedDestination === destination).length;
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }

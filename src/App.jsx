@@ -38,6 +38,7 @@ export default function App() {
   const [finalDefense, setFinalDefense] = useState(null);
   const [finalVote, setFinalVote] = useState(null);
   const [finalVoteErrorVersion, setFinalVoteErrorVersion] = useState(0);
+  const [finalVoteSyncing, setFinalVoteSyncing] = useState(false);
   const [sessionReplacedModal, setSessionReplacedModal] = useState(false);
   const stompClientRef = useRef(null);
   const roomsSubscriptionRef = useRef(null);
@@ -46,6 +47,11 @@ export default function App() {
   const roomRef = useRef(room);
   const phaseRef = useRef(phase);
   const isLoadingRef = useRef(false);
+  const activeRoomLoadCompletionRef = useRef(null);
+  const finalVoteResyncRequestedRef = useRef(0);
+  const finalVoteResyncHandledRef = useRef(0);
+  const finalVoteResyncWorkerRef = useRef(false);
+  const finalVoteResyncRoomCodeRef = useRef(null);
   const isRestoringRef = useRef(false);
   const lastRestoredTimeRef = useRef(0);
   const isSpeakingRef = useRef(false);
@@ -73,13 +79,30 @@ export default function App() {
   }
 
   async function loadRoom(roomCode) {
-    if (isLoadingRef.current) return;
+    if (isLoadingRef.current) {
+      await activeRoomLoadCompletionRef.current;
+      return 'busy';
+    }
+    const requestedSession = getSession();
+    const isCurrentSession = () => {
+      const currentSession = getSession();
+      return currentSession.roomCode === roomCode &&
+        currentSession.playerId === requestedSession.playerId &&
+        currentSession.playerSecret === requestedSession.playerSecret;
+    };
     isLoadingRef.current = true;
+    let completeRoomLoad;
+    activeRoomLoadCompletionRef.current = new Promise((resolve) => {
+      completeRoomLoad = resolve;
+    });
     setLoading(true);
     setError('');
+    let didLoad = false;
     try {
       const data = await getRoom(roomCode);
       const nextRoom = normalizeRoom(data);
+
+      if (!isCurrentSession()) return 'stale';
 
       if (nextRoom.game?.phase) {
         setPhase(nextRoom.game.phase);
@@ -105,10 +128,8 @@ export default function App() {
         }
       }
 
-      setRoom(() => {
-        // 이미 방을 나간 상태(세션 비워짐)라면 방 정보 상태를 갱신하지 않습니다.
-        const session = getSession();
-        if (!session.roomCode) return null;
+      setRoom((current) => {
+        if (!isCurrentSession()) return current;
 
         if (nextRoom.status === 'WAITING') {
           return {
@@ -132,10 +153,15 @@ export default function App() {
           const gameState = await getPlayerGameState(roomCode, pId, pSecret);
 
           if (gameState) {
+            if (!isCurrentSession()) return 'stale';
             setRoleInfo({
               role: gameState.role,
               topicWord: gameState.topicWord,
             });
+
+            if (gameState.phase !== undefined) {
+              setPhase(gameState.phase);
+            }
 
             // 플레이어 병합: 방 응답과 개인 상태 응답을 합쳐 DEAD 상태 누락 방지
             const nextRoomPlayers = nextRoom.players || [];
@@ -167,7 +193,10 @@ export default function App() {
               setVoteResult(gameState.voteResult);
             }
 
-            const restoredFinalStage = restoreFinalStage(nextRoom.game, gameState);
+            const restoredFinalStage = restoreFinalStage({
+              ...nextRoom.game,
+              phase: gameState.phase !== undefined ? gameState.phase : nextRoom.game?.phase,
+            }, gameState);
             setFinalDefense(restoredFinalStage.finalDefense);
             setFinalVote(restoredFinalStage.finalVote);
 
@@ -218,8 +247,10 @@ export default function App() {
             });
 
             lastRestoredTimeRef.current = Date.now();
+            didLoad = true;
           }
         } catch (gameStateErr) {
+          if (!isCurrentSession()) return 'stale';
           const status = gameStateErr.status;
           if (status === 401 || status === 403) {
             clearSession();
@@ -249,6 +280,7 @@ export default function App() {
         }
       }
     } catch (err) {
+      if (!isCurrentSession()) return 'stale';
       const status = err.status;
       if (status === 401 || status === 403 || status === 404) {
         clearSession();
@@ -266,6 +298,35 @@ export default function App() {
       setLoading(false);
       isLoadingRef.current = false;
       isRestoringRef.current = false;
+      activeRoomLoadCompletionRef.current = null;
+      completeRoomLoad();
+    }
+    return didLoad ? 'loaded' : 'failed';
+  }
+
+  async function syncFinalVoteState(roomCode) {
+    finalVoteResyncRoomCodeRef.current = roomCode;
+    finalVoteResyncRequestedRef.current += 1;
+    setFinalVoteSyncing(true);
+
+    if (finalVoteResyncWorkerRef.current) return;
+
+    finalVoteResyncWorkerRef.current = true;
+    let failed = false;
+    try {
+      while (finalVoteResyncHandledRef.current < finalVoteResyncRequestedRef.current) {
+        const requestVersion = finalVoteResyncRequestedRef.current;
+        const result = await loadRoom(finalVoteResyncRoomCodeRef.current);
+        if (result === 'loaded') {
+          finalVoteResyncHandledRef.current = requestVersion;
+        } else if (result !== 'busy') {
+          failed = true;
+          break;
+        }
+      }
+    } finally {
+      finalVoteResyncWorkerRef.current = false;
+      if (!failed) setFinalVoteSyncing(false);
     }
   }
 
@@ -615,6 +676,11 @@ export default function App() {
         setError(errMsg);
         if (event.data?.command === 'FINAL_VOTE') {
           setFinalVoteErrorVersion((current) => current + 1);
+          // 방·개인 상태를 함께 복원해 최종 투표 권한, 단계, 플레이어 상태를 서버 기준으로 맞춘다.
+          if (roomRef.current?.roomCode) {
+            void syncFinalVoteState(roomRef.current.roomCode);
+          }
+          return;
         }
         // 투표 오류 시 개인 게임 상태 재조회로 투표 상태 동기화
         if (roomRef.current?.roomCode && playerId && playerSecret) {
@@ -827,6 +893,7 @@ export default function App() {
     setGameOverResult(null);
     setFinalDefense(null);
     setFinalVote(null);
+    setFinalVoteSyncing(false);
   }
 
   function handleConfirmGameOver() {
@@ -886,6 +953,7 @@ export default function App() {
             finalDefense={finalDefense}
             finalVote={finalVote}
             finalVoteErrorVersion={finalVoteErrorVersion}
+            finalVoteSyncing={finalVoteSyncing}
             sessionReplaced={sessionReplacedModal}
             onVote={handleVote}
             onFinalVote={handleFinalVote}
