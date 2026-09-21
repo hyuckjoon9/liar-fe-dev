@@ -12,8 +12,11 @@ out/
 # 환경 변수 및 비밀 정보 (로컬 개발 환경 설정 등)
 .env
 .env.local
+.env.development
 .env.development.local
+.env.test
 .env.test.local
+.env.production
 .env.production.local
 
 # 로그 파일
